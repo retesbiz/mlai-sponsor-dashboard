@@ -31,7 +31,7 @@ Other scripts:
 | Command | What it does |
 |---|---|
 | `npm run demo` | Builds and serves the production build at http://localhost:4173. **Use this for the class demo** |
-| `npm test` | Runs 49 tests: CSV import, validation and malformed-input handling, KPI totals, sponsor switching, period filter, Startup Participations labelling, Definition of Done and sprint status rules. Needs Node 22.18+ (native TypeScript) |
+| `npm test` | Runs 59 tests: CSV import, validation and malformed-input handling, KPI totals, sponsor switching, period filter, Startup Participations labelling, measurable Definition of Done rules, and checks that the US03 expected values match the sample data. Needs Node 22.18+ (native TypeScript) |
 | `npm run build` | Type-checks (`tsc -b`) and builds to `dist/` |
 | `npm run typecheck` | Type-check the app, config and tests |
 | `npm run preview` | Serves an existing production build |
@@ -47,7 +47,7 @@ The app makes no network or API calls at runtime, so it works offline once depen
 | Import Sponsor Data | US01 (5 pts) | CSV picker and drag-and-drop, **Load Sample Data**, sample CSV downloads, validation, preview, import confirmation, newly imported rows marked "New", export, clear |
 | Sponsors | US02 (3 pts) | Searchable sponsor directory, sponsor selection, filtered event list, **View Dashboard** |
 | Impact Dashboard | US03 (5 pts) | Sponsor header, one-click sponsor switcher, reporting period, five KPI cards with share of all sponsors, per-event chart with metric toggle, sponsor comparison chart (click a bar to switch), events table with totals, empty states, **Sprint summary** button |
-| Sprint 1 Completion Summary | — | Headline **Verified Done x / 16 pts**, Demonstrated and Accepted tiles, a short Done-vs-Accepted explanation, the **Proposed Sprint 1 Definition of Done** (7 criteria, "Awaiting Team Confirmation" until agreed), a story completion table (DoD checklist progress, Awaiting Verification / Done, verified by, date, client acceptance), and expandable acceptance criteria + 7-item DoD checklists per story. Status is read-only on the site. See "Recording sprint status" below |
+| Sprint 1 Completion Summary | — | **Done / Demonstrated / Accepted** tiles (story points out of 16) with a one-line explanation, the **Sprint 1 Definition of Done — Measurable Criteria** (7 conditions, "Proposed — Awaiting Team Confirmation" until agreed), a story completion table (checks passed, DoD conditions met, Awaiting Verification / Not Done / Done, verified by, date, client/tutor acceptance), and expandable per-story **measurable verification checks** (Pass / Fail / Not Verified), DoD conditions, and the original backlog acceptance criteria. Read-only on the site. See "Recording sprint status" below |
 
 For the demo, see [DEMO_CHECKLIST.md](DEMO_CHECKLIST.md) (exact clicks, timings, expected numbers, story → evidence map) and [PRESENTER_GUIDE.md](PRESENTER_GUIDE.md) (talking points for each speaker).
 
@@ -96,21 +96,41 @@ Expected sample totals (All dates): Acme Technology 4 events / 505 attendees; Ho
 The site keeps three things separate:
 
 - **Demonstrated**: functionality shown in the prototype. Using a screen adds session *evidence* next to the acceptance criteria. It never changes status.
-- **Done**: verified by the team against all seven Definition of Done criteria, with a name and date.
-- **Accepted**: confirmed by the client or tutor after actual feedback.
+- **Done**: all agreed Definition of Done conditions verified and recorded by the team.
+- **Accepted**: explicitly accepted by the client or tutor.
+
+The **measurable Definition of Done** (proposed team standard):
+1. Acceptance Criteria: 100% of the story's agreed acceptance criteria recorded as Pass.
+2. Functional Testing: 100% of relevant functional test cases pass, zero unresolved critical defects.
+3. Integration: works within authorised access → data import → sponsor selection → impact dashboard, no failed required interactions.
+4. Data Accuracy: displayed metrics and records match expected results from the fictional sample dataset.
+5. Usability: a team member other than the implementer completes the workflow without assistance.
+6. Team Verification: a designated team member records name, date and confirmation that required checks passed.
+7. Demo Readiness: demonstrable with sample data, zero broken required interactions.
+
+Each story also has **measurable verification checks** (US04: 5, US01: 5, US02: 4, US03: 6). The US03 checks state the expected Acme Technology and Northstar Innovations values, and `npm test` confirms they equal the sample-data calculations. These values apply only to the unchanged built-in sample with no extra imports and All dates selected. The original Sprint Backlog acceptance criteria are kept alongside as the reference.
 
 Official status is git-tracked in [`src/data/sprintStatus.ts`](src/data/sprintStatus.ts). Visitors can't change it, and there are no clickable checklists on the site. To record verification:
 
-1. **Agree the Definition of Done.** Once the team has agreed the seven criteria, set
-   `DEFINITION_OF_DONE_STATUS = { state: 'agreed', agreedOn: 'YYYY-MM-DD', agreedBy: '…' }`. Until then the page says **Proposed Sprint 1 Definition of Done — Awaiting Team Confirmation**.
-2. **Tick DoD items per story, only after checking them**, recording who and when:
-   `dodChecks: { functionality: { checkedBy: 'Kai-Po Wang', checkedOn: '2026-10-20' }, … }`. All checklists start empty.
-3. **Mark a story Done only when all seven items are ticked and the DoD is agreed**:
-   `completion: { state: 'done', verifiedBy: 'Ian Wang', verifiedOn: '2026-10-21' }`. Otherwise it stays `{ state: 'awaiting-verification' }`.
-4. **Record client/tutor acceptance only after actual feedback**:
-   `acceptance: { state: 'accepted' | 'changes-requested', confirmedBy, confirmedOn, note? }`. Default `{ state: 'pending' }`. Accepted requires Done.
 
-`npm test`, and therefore the GitHub Pages deploy, fails if Done is recorded with a missing DoD item, name or date, before the DoD is agreed, or if Accepted comes before Done. Dates must be real calendar dates (YYYY-MM-DD).
+1. **Agree the Definition of Done (only if the team actually agrees it).** Set
+   `DEFINITION_OF_DONE_STATUS = { state: 'agreed', agreedOn: 'YYYY-MM-DD', agreedBy: '…' }`. Until then the page shows **Sprint 1 Definition of Done — Measurable Criteria** labelled **Proposed — Awaiting Team Confirmation**.
+2. **Record who implemented each story:** `implementedBy: ['…']` (needed for the Usability rule).
+3. **Record each story verification check after running it:** `checkResults: { 'us01-valid-import': { result: 'pass', checkedBy, checkedOn }, … }`. A Fail needs a `note` (e.g. defect reference). Unrecorded checks show **Not Verified**.
+4. **Record DoD conditions 2, 3, 4, 5 and 7 for the story:** `dodResults: { 'functional-testing': { result: 'pass', checkedBy, checkedOn, note: '12/12 cases, 0 critical defects' }, … }`. Only Data Accuracy may be `not-applicable`, and it needs a `reason`. Usability must be checked by someone **not** in `implementedBy`.
+   - Condition 1 (Acceptance Criteria) is **derived**: Pass only when 100% of the story's checks are recorded Pass.
+   - Condition 6 (Team Verification) is **derived** from step 5.
+5. **Mark Done only when every check and condition passes:** `completion: { state: 'done', verifiedBy, verifiedOn, confirmation: 'All required checks passed' }`. Otherwise it stays `{ state: 'awaiting-verification' }`.
+6. **Record client/tutor acceptance only after explicit feedback:** `acceptance: { state: 'accepted' | 'changes-requested', confirmedBy, confirmedOn, note? }`. Default `{ state: 'pending' }`. Accepted requires Done.
+
+`npm test`, and therefore the GitHub Pages deploy, fails if:
+- Done is recorded with any check or condition not passed, or before the DoD is agreed.
+- `implementedBy` is missing, or Usability was checked by the implementer.
+- Any result is missing a name, real date, Fail note or N/A reason.
+- The verification date is before the checks it confirms.
+- Accepted comes before Done.
+
+Automated test runs, page visits and clicks never record a result.
 
 `criteriaSource: 'draft'` marks acceptance criteria written from the Sprint 1 scope. Replace them with the Product Backlog wording. Commit and push to update the hosted site.
 

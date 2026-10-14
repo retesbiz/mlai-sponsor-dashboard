@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, CircleDashed, FileCheck2, Info, MonitorPlay, Square, SquareCheck, UserCheck } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, CircleDashed, FileCheck2, Info, MinusCircle, MonitorPlay, UserCheck, XCircle } from 'lucide-react'
 import { useAppState } from '../state/AppState'
 import { computeTotals } from '../lib/metrics'
 import { formatDate, formatNumber } from '../lib/format'
@@ -7,27 +7,51 @@ import {
   DEFINITION_OF_DONE_STATUS,
   DOD_CRITERIA,
   FUTURE_WORK,
+  SAMPLE_VALUES_NOTE,
   SPRINT,
   SPRINT_BACKLOG,
-  checkedCount,
+  checkCounts,
+  checkStatus,
+  conditionCounts,
+  conditionStatus,
+  overallStatus,
   validateSprintBacklog,
   type AcceptanceStatus,
   type BacklogItem,
-  type CompletionStatus,
+  type ConditionStatus,
   type EvidenceKey,
 } from '../data/sprintStatus'
 import { Badge, Button, Card, CardHeader, PageHeader } from '../components/ui'
 
-const TOTAL_DOD = DOD_CRITERIA.length
+const iso = (d: string) => formatDate(d)
 
-function StatusPill({ completion }: { completion: CompletionStatus }) {
-  return completion.state === 'done' ? (
-    <Badge tone="green">
-      <CheckCircle2 className="size-3.5" aria-hidden /> Done
-    </Badge>
-  ) : (
-    <Badge tone="amber">Awaiting Verification</Badge>
+const RESULT_STYLE: Record<ConditionStatus, { label: string; cls: string; icon: typeof Info }> = {
+  pass: { label: 'Pass', cls: 'bg-emerald-50 text-emerald-800 ring-emerald-200', icon: CheckCircle2 },
+  fail: { label: 'Fail', cls: 'bg-red-50 text-red-700 ring-red-200', icon: XCircle },
+  'not-verified': { label: 'Not Verified', cls: 'bg-slate-100 text-slate-600 ring-slate-200', icon: CircleDashed },
+  'not-applicable': { label: 'N/A', cls: 'bg-slate-50 text-slate-500 ring-slate-200', icon: MinusCircle },
+}
+
+function ResultPill({ status }: { status: ConditionStatus }) {
+  const { label, cls, icon: Icon } = RESULT_STYLE[status]
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${cls}`}>
+      <Icon className="size-3.5" aria-hidden />
+      {label}
+    </span>
   )
+}
+
+function OverallPill({ item }: { item: BacklogItem }) {
+  const s = overallStatus(item)
+  if (s === 'done')
+    return (
+      <Badge tone="green">
+        <CheckCircle2 className="size-3.5" aria-hidden /> Done
+      </Badge>
+    )
+  if (s === 'failing') return <Badge tone="red">Not Done · failed checks</Badge>
+  return <Badge tone="amber">Awaiting Verification</Badge>
 }
 
 function AcceptancePill({ acceptance }: { acceptance: AcceptanceStatus }) {
@@ -36,24 +60,26 @@ function AcceptancePill({ acceptance }: { acceptance: AcceptanceStatus }) {
   return <Badge tone="slate">Pending</Badge>
 }
 
-function DodProgress({ item }: { item: BacklogItem }) {
-  const n = checkedCount(item)
+/** Compact "3 Pass · 1 Fail · 2 Not Verified" with a segmented bar. */
+function Tally({ pass, fail, total, label }: { pass: number; fail: number; total: number; label: string }) {
+  const nv = total - pass - fail
   return (
     <span className="flex items-center gap-2.5">
       <span className="flex gap-0.5" aria-hidden>
-        {DOD_CRITERIA.map((c) => (
-          <span key={c.id} className={`h-2.5 w-2.5 rounded-sm ${item.dodChecks[c.id] ? 'bg-emerald-600' : 'bg-slate-200'}`} />
+        {Array.from({ length: total }, (_, i) => (
+          <span key={i} className={`h-2.5 w-2.5 rounded-sm ${i < pass ? 'bg-emerald-600' : i < pass + fail ? 'bg-red-500' : 'bg-slate-200'}`} />
         ))}
       </span>
-      <span className="tabular-nums text-slate-700">
-        <span className="font-semibold text-slate-900">{n}</span>/{TOTAL_DOD}
+      <span className="whitespace-nowrap tabular-nums text-slate-700">
+        <span className="font-semibold text-slate-900">{pass}</span>/{total}
+        {fail > 0 && <span className="ml-1 font-semibold text-red-700">· {fail} fail</span>}
       </span>
-      <span className="sr-only">Definition of Done criteria verified</span>
+      <span className="sr-only">
+        {label}: {pass} pass, {fail} fail, {nv} not verified
+      </span>
     </span>
   )
 }
-
-const iso = (d: string) => formatDate(d)
 
 function StatTile({ label, value, total, caption, tone, icon: Icon }: { label: string; value: number; total: number; caption: string; tone: string; icon: typeof Info }) {
   return (
@@ -65,14 +91,19 @@ function StatTile({ label, value, total, caption, tone, icon: Icon }: { label: s
         {label}
       </p>
       <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900 tabular-nums 2xl:text-4xl">
-        {value} <span className="text-lg font-medium text-slate-500">/ {total} pts</span>
+        {value} <span className="text-lg font-medium text-slate-500">/ {total} SP</span>
       </p>
       <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden>
-        <div className="h-full rounded-full bg-current transition-[width]" style={{ width: `${(value / total) * 100}%` }} />
+        <div className="h-full rounded-full bg-current" style={{ width: `${(value / total) * 100}%` }} />
       </div>
       <p className="mt-2 text-xs leading-snug text-slate-600">{caption}</p>
     </div>
   )
+}
+
+const SOURCE_NOTE: Record<string, string> = {
+  checks: 'From the recorded verification checks',
+  'verification-record': 'From the team verification record',
 }
 
 export default function SprintPage() {
@@ -87,25 +118,19 @@ export default function SprintPage() {
   const acceptedPoints = sumPoints((i) => i.acceptance.state === 'accepted')
   const dodAgreed = DEFINITION_OF_DONE_STATUS.state === 'agreed'
 
-  // Session evidence: what was demonstrated in this browser. It never changes Done or Accepted.
+  // Session evidence = "Demonstrated" only. It never counts as a Pass.
   const sponsorNames = new Set(records.map((r) => r.sponsor))
   const viewed = viewedDashboards.filter((v) => sponsorNames.has(v))
   const selectedTotals = selectedSponsor ? computeTotals(records.filter((r) => r.sponsor === selectedSponsor)) : null
-  const evidence: Record<EvidenceKey, string | null> = {
-    'signed-in': session ? `Entered through the simulated demo entry as ${session.role === 'staff' ? 'MLAI Staff' : 'Viewer'}.` : null,
-    'viewer-restricted': sessionEvidence['viewer-restricted'] ?? null,
-    'logged-out': sessionEvidence['logged-out'] ?? null,
-    'data-imported':
-      records.length > 0 && lastImport ? `${formatNumber(lastImport.added)} records imported from ${lastImport.fileName}.` : null,
-    'validation-shown': sessionEvidence['validation-shown'] ?? null,
-    'sponsor-selected':
-      selectedSponsor && selectedTotals
-        ? `${selectedSponsor} selected: ${selectedTotals.eventsFunded} of ${records.length} records shown.`
-        : sessionEvidence['sponsor-selected']
-          ? `${sessionEvidence['sponsor-selected']} was selected earlier in this session.`
-          : null,
-    'dashboard-shown': viewed.length > 0 ? `Dashboard calculated for ${viewed.join(', ')}.` : null,
-    'sponsor-switched': viewed.length > 1 ? `Dashboard switched between ${viewed.length} sponsors.` : null,
+  const evidence: Record<EvidenceKey, boolean> = {
+    'signed-in': !!session,
+    'viewer-restricted': !!sessionEvidence['viewer-restricted'],
+    'logged-out': !!sessionEvidence['logged-out'],
+    'data-imported': records.length > 0 && !!lastImport,
+    'validation-shown': !!sessionEvidence['validation-shown'],
+    'sponsor-selected': !!(selectedSponsor && selectedTotals) || !!sessionEvidence['sponsor-selected'],
+    'dashboard-shown': viewed.length > 0,
+    'sponsor-switched': viewed.length > 1,
   }
 
   const allOpen = open.size === SPRINT_BACKLOG.length
@@ -133,7 +158,7 @@ export default function SprintPage() {
         <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900" role="alert">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
           <div>
-            <p className="font-semibold">The recorded sprint status breaks the Done rules (src/data/sprintStatus.ts):</p>
+            <p className="font-semibold">The recorded verification breaks the Done rules (src/data/sprintStatus.ts):</p>
             <ul className="mt-1 list-disc pl-5">
               {problems.map((p) => (
                 <li key={p}>{p}</li>
@@ -143,16 +168,16 @@ export default function SprintPage() {
         </div>
       )}
 
-      {/* 1 · Headline numbers: Demonstrated ≠ Done ≠ Accepted */}
-      <section aria-label="Sprint 1 points summary" className="grid gap-4 md:grid-cols-3">
+      {/* 1 · Demonstrated ≠ Done ≠ Accepted */}
+      <section aria-label="Sprint 1 story point summary" className="grid gap-4 md:grid-cols-3">
         <div className="text-emerald-600">
           <StatTile
-            label="Verified Done"
+            label="Done (verified)"
             value={donePoints}
             total={total}
             icon={FileCheck2}
             tone="bg-emerald-50 text-emerald-700"
-            caption={`${doneStories} of ${SPRINT_BACKLOG.length} stories verified by the team against all ${TOTAL_DOD} Definition of Done criteria.`}
+            caption={`${doneStories} of ${SPRINT_BACKLOG.length} stories: all ${DOD_CRITERIA.length} DoD conditions verified and recorded by the team.`}
           />
         </div>
         <div className="text-blue-600">
@@ -162,7 +187,7 @@ export default function SprintPage() {
             total={total}
             icon={MonitorPlay}
             tone="bg-blue-50 text-blue-700"
-            caption="Functionality shown in the prototype during the demo. Demonstrated does not mean Done."
+            caption="Functionality shown in the prototype. Demonstrated does not mean Done."
           />
         </div>
         <div className="text-violet-600">
@@ -172,98 +197,110 @@ export default function SprintPage() {
             total={total}
             icon={UserCheck}
             tone="bg-violet-50 text-violet-700"
-            caption="Recorded only after actual client or tutor feedback."
+            caption="Explicitly accepted by the client or tutor after feedback."
           />
         </div>
       </section>
       <p className="mb-6 mt-3 flex items-start gap-2 text-sm text-slate-600">
         <Info className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
         <span>
-          <span className="font-semibold text-slate-800">Done vs Accepted:</span> <em>Done</em> means the team has verified a story against every Definition of
-          Done criterion and recorded who checked it and when. <em>Accepted</em> means the client or tutor has confirmed it meets their needs. A story can be
-          Done but not yet Accepted.
+          <span className="font-semibold text-slate-800">Demonstrated</span> = shown in the prototype. <span className="font-semibold text-slate-800">Done</span> = all
+          agreed Definition of Done conditions verified and recorded by the team. <span className="font-semibold text-slate-800">Accepted</span> = explicitly
+          accepted by the client or tutor. Page visits, clicks and automated test runs never change these on their own.
         </span>
       </p>
 
-      {/* 2 · Definition of Done */}
+      {/* 2 · Measurable Definition of Done */}
       <Card className="mb-6 overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
           <div>
-            <h2 className="text-[1.05rem] font-semibold tracking-tight text-slate-900">
-              {dodAgreed ? 'Sprint 1 Definition of Done' : 'Proposed Sprint 1 Definition of Done'}
-            </h2>
-            <p className="mt-0.5 text-sm text-slate-600">A story is Done only when all seven are verified and a team member records their name and the date.</p>
+            <h2 className="text-[1.1rem] font-semibold tracking-tight text-slate-900">Sprint 1 Definition of Done — Measurable Criteria</h2>
+            <p className="mt-0.5 text-sm text-slate-600">A user story is Done only when all seven conditions are satisfied.</p>
           </div>
           {DEFINITION_OF_DONE_STATUS.state === 'agreed' ? (
             <Badge tone="green">
               Agreed by {DEFINITION_OF_DONE_STATUS.agreedBy}, {iso(DEFINITION_OF_DONE_STATUS.agreedOn)}
             </Badge>
           ) : (
-            <span className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-900">Awaiting Team Confirmation</span>
+            <span className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-900">Proposed — Awaiting Team Confirmation</span>
           )}
         </div>
-        <ol className="grid gap-x-8 gap-y-3 px-5 py-5 sm:px-6 lg:grid-flow-col lg:grid-cols-2 lg:grid-rows-4">
+        <ol className="grid gap-x-8 gap-y-3.5 px-5 py-5 sm:px-6 lg:grid-flow-col lg:grid-cols-2 lg:grid-rows-4">
           {DOD_CRITERIA.map((c, i) => (
             <li key={c.id} className="flex items-start gap-3">
               <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">{i + 1}</span>
               <p className="text-[0.95rem] leading-snug text-slate-700">
-                <span className="font-semibold text-slate-900">{c.title}</span> — {c.text}
+                <span className="font-semibold text-slate-900">{c.title}:</span> {c.text}
               </p>
             </li>
           ))}
         </ol>
+        {!dodAgreed && (
+          <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-600 sm:px-6">
+            This is a proposed team standard. It is not recorded as agreed at Sprint Planning, and no story can be marked Done until the team confirms it.
+          </p>
+        )}
       </Card>
 
       {/* 3 · Story completion table */}
       <Card className="mb-6 overflow-hidden">
-        <CardHeader title="Story completion" subtitle="Official status from the team’s git-tracked record. Using the website never changes it." />
-        <div className="overflow-x-auto">
+        <CardHeader title="Story completion" subtitle="Official results from the team’s git-tracked record. Using this website never changes them." />
+        {/* relative: keeps the table's screen-reader-only text inside this scroll box (otherwise it widens the page on phones) */}
+        <div className="relative overflow-x-auto">
           <table className="min-w-full text-sm">
             <caption className="sr-only">Sprint 1 story completion</caption>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th scope="col" className="py-3 pl-5 pr-3 sm:pl-6">Story</th>
-                <th scope="col" className="px-3 py-3 text-right">Points</th>
-                <th scope="col" className="px-3 py-3">DoD checklist</th>
-                <th scope="col" className="px-3 py-3">Status</th>
+                <th scope="col" className="px-3 py-3 text-right">SP</th>
+                <th scope="col" className="px-3 py-3">Checks passed</th>
+                <th scope="col" className="px-3 py-3">DoD conditions met</th>
+                <th scope="col" className="px-3 py-3">DoD status</th>
                 <th scope="col" className="px-3 py-3">Verified by</th>
-                <th scope="col" className="px-3 py-3">Verification date</th>
-                <th scope="col" className="py-3 pl-3 pr-5 sm:pr-6">Client acceptance</th>
+                <th scope="col" className="px-3 py-3">Date</th>
+                <th scope="col" className="py-3 pl-3 pr-5 sm:pr-6">Client / tutor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {SPRINT_BACKLOG.map((item) => (
-                <tr key={item.id}>
-                  <th scope="row" className="whitespace-nowrap py-3.5 pl-5 pr-3 text-left font-normal sm:pl-6">
-                    <span className="font-mono font-semibold text-slate-900">{item.id}</span> <span className="font-medium text-slate-800">{item.title}</span>
-                  </th>
-                  <td className="px-3 py-3.5 text-right tabular-nums text-slate-700">{item.points}</td>
-                  <td className="px-3 py-3.5">
-                    <DodProgress item={item} />
-                  </td>
-                  <td className="px-3 py-3.5">
-                    <StatusPill completion={item.completion} />
-                  </td>
-                  <td className="px-3 py-3.5 text-slate-700">{item.completion.state === 'done' ? item.completion.verifiedBy : <span className="text-slate-400">—</span>}</td>
-                  <td className="px-3 py-3.5 whitespace-nowrap text-slate-700">
-                    {item.completion.state === 'done' ? iso(item.completion.verifiedOn) : <span className="text-slate-400">—</span>}
-                  </td>
-                  <td className="py-3.5 pl-3 pr-5 sm:pr-6">
-                    <AcceptancePill acceptance={item.acceptance} />
-                  </td>
-                </tr>
-              ))}
+              {SPRINT_BACKLOG.map((item) => {
+                const cc = checkCounts(item)
+                const dc = conditionCounts(item)
+                return (
+                  <tr key={item.id}>
+                    <th scope="row" className="whitespace-nowrap py-3.5 pl-5 pr-3 text-left font-normal sm:pl-6">
+                      <span className="font-mono font-semibold text-slate-900">{item.id}</span> <span className="font-medium text-slate-800">{item.title}</span>
+                    </th>
+                    <td className="px-3 py-3.5 text-right tabular-nums text-slate-700">{item.points}</td>
+                    <td className="px-3 py-3.5">
+                      <Tally pass={cc.pass} fail={cc.fail} total={cc.total} label="Verification checks" />
+                    </td>
+                    <td className="px-3 py-3.5">
+                      <Tally pass={dc.met} fail={dc.fail} total={dc.total} label="DoD conditions" />
+                    </td>
+                    <td className="px-3 py-3.5">
+                      <OverallPill item={item} />
+                    </td>
+                    <td className="px-3 py-3.5 text-slate-700">{item.completion.state === 'done' ? item.completion.verifiedBy : <span className="text-slate-400">—</span>}</td>
+                    <td className="whitespace-nowrap px-3 py-3.5 text-slate-700">
+                      {item.completion.state === 'done' ? iso(item.completion.verifiedOn) : <span className="text-slate-400">—</span>}
+                    </td>
+                    <td className="py-3.5 pl-3 pr-5 sm:pr-6">
+                      <AcceptancePill acceptance={item.acceptance} />
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-slate-200 bg-slate-50/80 font-semibold text-slate-900">
                 <th scope="row" className="py-3 pl-5 pr-3 text-left sm:pl-6">Total</th>
                 <td className="px-3 py-3 text-right tabular-nums">{total}</td>
-                <td className="px-3 py-3" />
+                <td className="px-3 py-3" colSpan={2} />
                 <td className="px-3 py-3 tabular-nums" colSpan={3}>
-                  {donePoints} / {total} pts verified Done
+                  {donePoints} / {total} SP Done
                 </td>
                 <td className="py-3 pl-3 pr-5 tabular-nums sm:pr-6">
-                  {acceptedPoints} / {total} pts accepted
+                  {acceptedPoints} / {total} SP accepted
                 </td>
               </tr>
             </tfoot>
@@ -271,104 +308,129 @@ export default function SprintPage() {
         </div>
       </Card>
 
-      {/* 4 · Expandable per-story detail */}
+      {/* 4 · Expandable per-story verification */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[1.05rem] font-semibold tracking-tight text-slate-900">Acceptance criteria and DoD checklists</h2>
+        <h2 className="text-[1.05rem] font-semibold tracking-tight text-slate-900">Story verification checks</h2>
         <Button size="sm" onClick={() => setOpen(allOpen ? new Set() : new Set(SPRINT_BACKLOG.map((i) => i.id)))} aria-expanded={allOpen}>
           {allOpen ? 'Collapse all' : 'Expand all'}
         </Button>
       </div>
       <div className="mb-6 space-y-3">
         {SPRINT_BACKLOG.map((item) => {
-          const isOpen = open.has(item.id)
+          const cc = checkCounts(item)
           return (
             <details
               key={item.id}
-              open={isOpen}
+              open={open.has(item.id)}
               onToggle={(e) => toggle(item.id, (e.currentTarget as HTMLDetailsElement).open)}
               className="group overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card"
             >
               <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4 transition-colors hover:bg-slate-50 sm:px-6 [&::-webkit-details-marker]:hidden">
                 <span className="rounded-md bg-slate-900 px-2 py-0.5 font-mono text-sm font-semibold text-white">{item.id}</span>
                 <span className="min-w-0 flex-1 text-[1.02rem] font-semibold text-slate-900">
-                  {item.title} <span className="font-normal text-slate-500">· {item.points} pts</span>
+                  {item.title} <span className="font-normal text-slate-500">· {item.points} SP</span>
                 </span>
-                <DodProgress item={item} />
-                <StatusPill completion={item.completion} />
+                <Tally pass={cc.pass} fail={cc.fail} total={cc.total} label="Verification checks" />
+                <OverallPill item={item} />
                 <AcceptancePill acceptance={item.acceptance} />
                 <ChevronDown className="size-5 shrink-0 text-slate-400 transition-transform group-open:rotate-180" aria-hidden />
               </summary>
 
-              <div className="grid gap-6 border-t border-slate-100 px-5 py-5 sm:px-6 lg:grid-cols-2">
+              <div className="grid gap-6 border-t border-slate-100 px-5 py-5 sm:px-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
                 <section>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Acceptance criteria</h3>
-                  {item.criteriaSource === 'draft' && (
-                    <p className="mt-1 text-xs font-medium text-amber-800">Draft from the Sprint 1 scope. Team to replace with the Product Backlog wording.</p>
-                  )}
-                  <ul className="mt-3 space-y-2.5">
-                    {item.criteria.map((c) => {
-                      const ev = c.evidence ? evidence[c.evidence] : null
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Measurable verification checks</h3>
+                  <ul className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200">
+                    {item.verificationChecks.map((c) => {
+                      const r = item.checkResults[c.id]
+                      const demo = c.evidence ? evidence[c.evidence] : false
                       return (
-                        <li key={c.text} className="flex items-start gap-2 text-sm">
-                          {ev ? (
-                            <MonitorPlay className="mt-0.5 size-4 shrink-0 text-blue-600" aria-label="Demonstrated this session" />
-                          ) : (
-                            <CircleDashed className="mt-0.5 size-4 shrink-0 text-slate-400" aria-label="Not demonstrated this session" />
-                          )}
-                          <span>
-                            <span className="font-medium text-slate-900">{c.text}</span>
-                            <span className={`block text-xs ${ev ? 'text-blue-800' : 'text-slate-500'}`}>
-                              {ev ? `Demonstrated: ${ev}` : 'Not demonstrated in this session yet.'}
+                        <li key={c.id} className="flex items-start gap-3 px-3.5 py-2.5 text-sm">
+                          <ResultPill status={checkStatus(item, c.id)} />
+                          <span className="min-w-0 flex-1">
+                            <span className="text-slate-900">{c.text}</span>
+                            <span className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-500">
+                              {r ? (
+                                <span className={r.result === 'fail' ? 'text-red-700' : 'text-emerald-800'}>
+                                  {r.checkedBy}, {iso(r.checkedOn)}
+                                  {r.note ? ` · ${r.note}` : ''}
+                                </span>
+                              ) : (
+                                <span>No result recorded</span>
+                              )}
+                              {demo && (
+                                <span className="inline-flex items-center gap-1 text-blue-700">
+                                  <MonitorPlay className="size-3" aria-hidden /> Demonstrated this session
+                                </span>
+                              )}
                             </span>
                           </span>
                         </li>
                       )
                     })}
                   </ul>
-                  <p className="mt-3 text-xs text-slate-500">Demonstration evidence comes from this browser session only. It is not verification.</p>
+                  {item.verificationChecks.some((c) => c.expected) && <p className="mt-2 text-xs text-slate-500">{SAMPLE_VALUES_NOTE}</p>}
+                  <details className="mt-3 text-sm">
+                    <summary className="cursor-pointer font-medium text-slate-700 hover:text-slate-900">
+                      Sprint Backlog acceptance criteria ({item.backlogCriteria.length})
+                      {item.criteriaSource === 'draft' && <span className="ml-2 text-xs font-medium text-amber-800">draft: replace with Product Backlog wording</span>}
+                    </summary>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-600">
+                      {item.backlogCriteria.map((t) => (
+                        <li key={t}>{t}</li>
+                      ))}
+                    </ul>
+                  </details>
                 </section>
 
                 <section>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Definition of Done checklist · {checkedCount(item)}/{TOTAL_DOD} verified
-                  </h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Definition of Done conditions</h3>
                   <ul className="mt-3 space-y-2">
-                    {DOD_CRITERIA.map((c) => {
-                      const check = item.dodChecks[c.id]
+                    {DOD_CRITERIA.map((c, i) => {
+                      const status = conditionStatus(item, c.id)
+                      const rec = c.source === 'recorded' ? item.dodResults[c.id as keyof typeof item.dodResults] : undefined
                       return (
                         <li key={c.id} className="flex items-start gap-2.5 text-sm">
-                          {check ? (
-                            <SquareCheck className="mt-0.5 size-[1.1rem] shrink-0 text-emerald-600" role="img" aria-label="Verified" />
-                          ) : (
-                            <Square className="mt-0.5 size-[1.1rem] shrink-0 text-slate-400" role="img" aria-label="Not yet verified" />
-                          )}
+                          <ResultPill status={status} />
                           <span>
-                            <span className="font-medium text-slate-900">{c.title}</span>
-                            <span className={`block text-xs ${check ? 'text-emerald-800' : 'text-slate-500'}`}>
-                              {check ? `Checked by ${check.checkedBy}, ${iso(check.checkedOn)}${check.note ? ` · ${check.note}` : ''}` : 'Not yet verified'}
+                            <span className="font-medium text-slate-900">
+                              {i + 1}. {c.title}
+                            </span>
+                            <span className="block text-xs text-slate-500">
+                              {SOURCE_NOTE[c.source] ??
+                                (rec
+                                  ? `${rec.checkedBy}, ${iso(rec.checkedOn)}${rec.result === 'not-applicable' ? ` · ${rec.reason}` : rec.note ? ` · ${rec.note}` : ''}`
+                                  : 'No result recorded')}
                             </span>
                           </span>
                         </li>
                       )
                     })}
                   </ul>
+                  {item.id !== 'US04' && item.implementedBy.length === 0 && (
+                    <p className="mt-3 text-xs text-slate-500">Implementer not recorded yet (Usability must be checked by someone else).</p>
+                  )}
+                  {item.id === 'US04' && item.implementedBy.length === 0 && (
+                    <p className="mt-3 text-xs text-slate-500">Implementer not recorded yet. Simulated access only, not production authentication.</p>
+                  )}
                 </section>
 
-                <dl className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3 lg:col-span-2">
+                <dl className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3 xl:col-span-2">
                   <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wider text-slate-500">Completion status</dt>
+                    <dt className="text-xs font-semibold uppercase tracking-wider text-slate-500">Overall DoD status</dt>
                     <dd className="mt-1">
-                      <StatusPill completion={item.completion} />
+                      <OverallPill item={item} />
                     </dd>
                   </div>
                   <div>
                     <dt className="text-xs font-semibold uppercase tracking-wider text-slate-500">Verified by · date</dt>
                     <dd className="mt-1 text-slate-800">
-                      {item.completion.state === 'done' ? `${item.completion.verifiedBy} · ${iso(item.completion.verifiedOn)}` : 'Not recorded'}
+                      {item.completion.state === 'done'
+                        ? `${item.completion.verifiedBy} · ${iso(item.completion.verifiedOn)} · ${item.completion.confirmation}`
+                        : 'Not recorded'}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wider text-slate-500">Client acceptance</dt>
+                    <dt className="text-xs font-semibold uppercase tracking-wider text-slate-500">Client / tutor acceptance</dt>
                     <dd className="mt-1 flex flex-wrap items-center gap-2 text-slate-800">
                       <AcceptancePill acceptance={item.acceptance} />
                       {item.acceptance.state !== 'pending' && (
@@ -381,7 +443,7 @@ export default function SprintPage() {
                   </div>
                 </dl>
 
-                <div className="flex flex-wrap items-start justify-between gap-3 text-sm text-slate-600 lg:col-span-2">
+                <div className="flex flex-wrap items-start justify-between gap-3 text-sm text-slate-600 xl:col-span-2">
                   <p className="max-w-3xl">
                     <span className="font-semibold text-slate-800">Demonstrated in the prototype:</span> {item.demonstrated}
                   </p>
@@ -403,12 +465,12 @@ export default function SprintPage() {
           <CardHeader title="How verification is recorded" />
           <div className="space-y-2 p-5 text-sm text-slate-700">
             <p>
-              Official status lives in <code className="rounded bg-slate-100 px-1 text-[0.8rem]">src/data/sprintStatus.ts</code> and changes only through a
-              git commit by the team. Visitors to this site cannot change it.
+              Results live in <code className="rounded bg-slate-100 px-1 text-[0.8rem]">src/data/sprintStatus.ts</code> and change only through a team commit.
+              Visitors cannot change them.
             </p>
             <p>
-              The team ticks each DoD item with a name and date. A story can be set to Done only when all seven are ticked. The build fails if these rules are
-              broken.
+              Each check is recorded as Pass or Fail with a name and date. A story can be Done only when every check and condition passes, the implementer is
+              recorded, and a designated team member confirms it. The build fails if these rules are broken.
             </p>
           </div>
         </Card>
@@ -437,6 +499,9 @@ export default function SprintPage() {
           </ul>
         </Card>
       </div>
+      <p className="mt-6 text-xs text-slate-500">
+        All sponsors and figures are fictional demonstration data. {formatNumber(records.length)} records currently loaded in this browser.
+      </p>
     </>
   )
 }
