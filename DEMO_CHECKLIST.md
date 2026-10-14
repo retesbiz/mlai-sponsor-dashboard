@@ -10,12 +10,12 @@ Team 0311 · MLAI Sponsor & Impact Reporting Dashboard · FIT2002 Week 11
 
 ## 1. The day before
 
-- [ ] `npm install`, then `npm test` (40 tests), `npm run typecheck` and `npm run build` all pass.
+- [ ] `npm install`, then `npm test` (49 tests), `npm run typecheck` and `npm run build` all pass.
 - [ ] Choose how you'll run it:
   - **Hosted (no setup):** https://retesbiz.github.io/mlai-sponsor-dashboard/. Needs internet on the demo computer. The app makes no other network requests once it has loaded.
   - **Local (no internet needed):** `npm run demo` serves the production build at **http://localhost:4173**. `npm run dev` (port 5173) is a further fallback.
   - Keep the other option ready as a backup.
-- [ ] **Record verified status, but only what the team has actually verified** (see section 6). If nothing has been verified, leave it: the summary will honestly show "Awaiting team confirmation".
+- [ ] **Record verification, but only what the team has actually verified** (see section 6). If nothing has been verified, leave it: the summary will honestly show 0 / 16 verified Done, the Definition of Done as "Proposed … Awaiting Team Confirmation", and each story as "Awaiting Verification".
 - [ ] Do one full timed rehearsal with all three speakers, using a stopwatch.
 - [ ] Decide who drives the mouse. Suggestion: one person drives the whole time, and speakers say "next" instead of swapping laptops.
 - [ ] Agree on a backup in case the laptop or projector fails, such as screenshots or a short screen recording. **(Team to decide.)**
@@ -49,7 +49,7 @@ Team 0311 · MLAI Sponsor & Impact Reporting Dashboard · FIT2002 Week 11
 | 7 | 1:45 | Sabiuddin | *(point at KPI cards)* | **4 · 505 · 33 · 32,900 · 1,540**. The third card is **Startup Participations**, with the note "Not unique startups". Amber "Demonstration data" label | US03 |
 | 8 | 2:15 | Sabiuddin | **Engagement** (button above the left chart) | Bars 340 / 260 / 510 / 430. Comparison chart shows Community Engagement | US03 |
 | 9 | 2:30 | Sabiuddin | Under **Switch sponsor**: **Northstar Innovations** | Header, KPIs, charts and table all change: **4 · 750 · 63 · 56,700 · 2,610** | US03 |
-| 10 | 2:50 | Sabiuddin | **Sprint summary →** (top right of the dashboard) | **Sprint 1 Completion Summary**: five-column key and a summary table. Criteria evidence counts appear. Definition of Done shows whatever the team recorded (default "Awaiting team confirmation"). Acceptance shows **Pending — not yet confirmed** | All |
+| 10 | 2:50 | Sabiuddin | **Sprint summary →** (top right of the dashboard) | **Sprint 1 Completion Summary**: tiles for **Verified Done x / 16**, Demonstrated 16 / 16 and Accepted. Below them, the **Proposed Sprint 1 Definition of Done** (7 criteria) and the story completion table. Shows exactly what the team recorded (default: 0/7 checks, Awaiting Verification, Pending). Optional: click one story (e.g. US01) to expand its acceptance criteria and DoD checklist | All |
 | 11 | 3:30 | Sabiuddin | *(close)* | | |
 
 **Optional extras (only if ahead of time):**
@@ -94,32 +94,37 @@ If you also imported the 2 valid rows from the errors file, totals change: Acme 
 
 ## 6. Story → evidence map, and recording status
 
-The **Sprint 1 Completion Summary** page keeps five things apart:
+The **Sprint 1 Completion Summary** keeps three concepts separate:
 
-| # | Layer | Who decides | Where it comes from |
+| Concept | Meaning | Who decides | Shown as |
 |---|---|---|---|
-| 1 | Sprint Backlog item | Team (Sprint Planning) | `src/data/sprintStatus.ts`: id, title, points |
-| 2 | Demonstrated | The prototype | What the app actually does, described per story |
-| 3 | Acceptance-criteria evidence | Observed automatically | What was used in *this browser session* (e.g. sample loaded, two sponsors viewed). **Evidence only. It never marks anything Done or Accepted** |
-| 4 | Definition of Done | Team, after verifying | `dod` in `src/data/sprintStatus.ts`. Default **Awaiting team confirmation** |
-| 5 | Acceptance | Client / tutor | `acceptance` in `src/data/sprintStatus.ts`. Default **Pending — not yet confirmed** |
+| **Demonstrated** | Functionality shown in the prototype during the demo | The prototype | "Demonstrated" tile (16 / 16). Per-criterion session evidence in the expanded story view. **Evidence only, never status** |
+| **Done** | Verified against all 7 Definition of Done criteria, with a team member's name and date | The team | "Verified Done x / 16 pts", the 7-box checklist per story, **Awaiting Verification / Done** |
+| **Accepted** | Client or tutor confirmation after actual feedback | Client / tutor | **Pending / Accepted / Changes Requested** |
 
-**To record a verified status** (only after it has really happened): edit `src/data/sprintStatus.ts`, e.g.
+The seven criteria (Functionality, Acceptance Criteria, Testing, Integration, User Experience, Team Verification, Demo Readiness) appear as the **Proposed Sprint 1 Definition of Done — Awaiting Team Confirmation** until the team records that it agreed them.
 
-```ts
-dod: { state: 'verified', verifiedBy: 'Ian Wang', verifiedOn: '2026-10-20', note: 'Checked against our DoD' },
-```
+**To record verification** (only after it has really happened), edit `src/data/sprintStatus.ts`. Visitors to the website can't change status. It only changes by commit:
 
-Then run `npm test`. It rejects a missing name or date, and anything marked accepted before it's verified Done. Commit and push to update the hosted site. Leave `acceptance` as `{ state: 'pending' }` until the client or tutor actually confirms.
+1. **Agree the Definition of Done.** Once the team has agreed the seven criteria, set
+   `DEFINITION_OF_DONE_STATUS = { state: 'agreed', agreedOn: 'YYYY-MM-DD', agreedBy: '…' }`. Until then the page says **Proposed Sprint 1 Definition of Done — Awaiting Team Confirmation**.
+2. **Tick DoD items per story, only after checking them**, recording who and when:
+   `dodChecks: { functionality: { checkedBy: 'Kai-Po Wang', checkedOn: '2026-10-20' }, … }`. All checklists start empty.
+3. **Mark a story Done only when all seven items are ticked and the DoD is agreed**:
+   `completion: { state: 'done', verifiedBy: 'Ian Wang', verifiedOn: '2026-10-21' }`. Otherwise it stays `{ state: 'awaiting-verification' }`.
+4. **Record client/tutor acceptance only after actual feedback**:
+   `acceptance: { state: 'accepted' | 'changes-requested', confirmedBy, confirmedOn, note? }`. Default `{ state: 'pending' }`. Accepted requires Done.
+
+`npm test`, and therefore the GitHub Pages deploy, fails if Done is recorded with a missing DoD item, name or date, before the DoD is agreed, or if Accepted comes before Done. Dates must be real calendar dates (YYYY-MM-DD).
 
 The acceptance criteria in that file are **drafts written from the Sprint 1 scope** (`criteriaSource: 'draft'`, shown on screen as "Draft criteria"). Replace them with your Product Backlog wording and set `criteriaSource: 'product-backlog'`. **[CONFIRM]**
 
 | Story | Draft acceptance criteria | Evidence the audience sees | Step |
 |---|---|---|---|
-| **US04** Authorised access (3 pts) | Only the login screen is available before entering. User and role are visible. A non-staff role can't import (simulated). The user can log out. | Login is the only entry point. **Enter Demo** opens the app. The profile shows the role and "Simulated sign-in". Optional: Viewer disables import. **Log out** (top right) returns to login. | 0–1 (+ optional) |
-| **US01** Import sponsor-impact data (5 pts) | A staff user can import a CSV with the agreed fields. A confirmation shows the count. Invalid or malformed rows are reported and not imported. | **Load Sample Data** → "11 sponsor-impact records imported". Optional: the errors file shows line-level validation. Malformed files, such as an unmatched quote, get a clear message. | 2 (+ optional) |
-| **US02** View sponsor-specific information (3 pts) | The user can find and select a sponsor. Only that sponsor's records are shown. The user can open its dashboard. | Search "acme" → 1 card. Selecting it shows 4 Acme-only events. **View Dashboard**. | 3–6 |
-| **US03** Display agreed sponsor-impact metrics (5 pts) | The agreed metrics are shown for the selected sponsor and period. Switching sponsor updates every metric. Fictional data is labelled. | Five KPI cards, including Startup Participations (A1.2, per event). The table total row matches the KPIs. Switching to Northstar changes everything. "Demonstration data" label. | 7–9 |
+| **US04** Authorised Access (3 pts) | Only the login screen is available before entering. User and role are visible. A non-staff role can't import (simulated). The user can log out. | Login is the only entry point. **Enter Demo** opens the app. The profile shows the role and "Simulated sign-in". Optional: Viewer disables import. **Log out** (top right) returns to login. | 0–1 (+ optional) |
+| **US01** Sponsor-Impact Data Import (5 pts) | A staff user can import a CSV with the agreed fields. A confirmation shows the count. Invalid or malformed rows are reported and not imported. | **Load Sample Data** → "11 sponsor-impact records imported". Optional: the errors file shows line-level validation. Malformed files, such as an unmatched quote, get a clear message. | 2 (+ optional) |
+| **US02** Sponsor-Specific View (3 pts) | The user can find and select a sponsor. Only that sponsor's records are shown. The user can open its dashboard. | Search "acme" → 1 card. Selecting it shows 4 Acme-only events. **View Dashboard**. | 3–6 |
+| **US03** Impact Metrics Dashboard (5 pts) | The agreed metrics are shown for the selected sponsor and period. Switching sponsor updates every metric. Fictional data is labelled. | Five KPI cards, including Startup Participations (A1.2, per event). The table total row matches the KPIs. Switching to Northstar changes everything. "Demonstration data" label. | 7–9 |
 | All | Sprint Goal, backlog and completion shown honestly. | Login panel shows the goal. The summary page keeps evidence, Done and Acceptance separate. | 0, 10 |
 
 ## 7. Things not to say or show
@@ -134,8 +139,9 @@ The acceptance criteria in that file are **drafts written from the Sprint 1 scop
 ## 8. Information the team must confirm (not in the project files)
 
 - [ ] The real acceptance criteria for US04, US01, US02 and US03 (replace the drafts in `src/data/sprintStatus.ts`).
-- [ ] Your Definition of Done, and which stories actually meet it. Record only verified ones, with who and when.
-- [ ] Anything carried over to Sprint 2 (use `state: 'not-done'` with a note).
+- [ ] Whether the team agrees the proposed seven-criterion Definition of Done (then record `agreed`, with who and when).
+- [ ] For each story, which DoD criteria have actually been checked, by whom and when. Only then mark it Done.
+- [ ] Anything carried over to Sprint 2 (leave it Awaiting Verification and add a `note`).
 - [ ] Sprint progress evidence you want to mention: burndown, task board, hours, velocity.
 - [ ] Any feedback or acceptance MLAI or your tutor has actually given, with dates.
 - [ ] Who your Product Owner is.

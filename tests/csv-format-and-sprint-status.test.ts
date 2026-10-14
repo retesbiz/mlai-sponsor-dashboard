@@ -6,7 +6,18 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseImpactCsv, scanCsv } from '../src/lib/csv.ts'
 import { METRICS, computeTotals } from '../src/lib/metrics.ts'
-import { SPRINT, SPRINT_BACKLOG, validateSprintBacklog, type BacklogItem } from '../src/data/sprintStatus.ts'
+import {
+  DEFINITION_OF_DONE_STATUS,
+  DOD_CRITERIA,
+  SPRINT,
+  SPRINT_BACKLOG,
+  checkedCount,
+  validateSprintBacklog,
+  type BacklogItem,
+  type DefinitionOfDoneStatus,
+  type DodCheck,
+  type DodCriterionId,
+} from '../src/data/sprintStatus.ts'
 
 const HEADER = 'sponsor,event,date,attendees,startups_supported,media_reach,community_engagement'
 const csv = (...rows: string[]) => [HEADER, ...rows].join('\n')
@@ -112,42 +123,101 @@ describe('Startup Participations metric (US03, A1.2 “Startups Supported”)', 
   })
 })
 
-describe('Sprint 1 backlog and status file', () => {
+describe('Sprint 1 backlog, Definition of Done and status file', () => {
   test('backlog matches Sprint Planning: US04, US01, US02, US03 = 16 of 18 points', () => {
     assert.deepEqual(
-      SPRINT_BACKLOG.map((s) => [s.id, s.points]),
+      SPRINT_BACKLOG.map((s) => [s.id, s.title, s.points]),
       [
-        ['US04', 3],
-        ['US01', 5],
-        ['US02', 3],
-        ['US03', 5],
+        ['US04', 'Authorised Access', 3],
+        ['US01', 'Sponsor-Impact Data Import', 5],
+        ['US02', 'Sponsor-Specific View', 3],
+        ['US03', 'Impact Metrics Dashboard', 5],
       ],
     )
     assert.equal(SPRINT.capacity, 18)
   })
 
-  test('recorded status is consistent (names and dates present, nothing accepted before Done)', () => {
+  test('Definition of Done has the seven agreed-format criteria, in order', () => {
+    assert.deepEqual(
+      DOD_CRITERIA.map((c) => c.title),
+      ['Functionality', 'Acceptance Criteria', 'Testing', 'Integration', 'User Experience', 'Team Verification', 'Demo Readiness'],
+    )
+    assert.ok(DOD_CRITERIA.every((c) => c.text.endsWith('.')))
+  })
+
+  test('recorded status follows the Done rules (validated on every build and deploy)', () => {
     assert.deepEqual(validateSprintBacklog(), [])
   })
 
-  const base: BacklogItem = { ...SPRINT_BACKLOG[0], dod: { state: 'awaiting-team-confirmation' }, acceptance: { state: 'pending' } }
-
-  test('validator rejects Done without who/when', () => {
-    const bad = { ...base, dod: { state: 'verified' as const, verifiedBy: '', verifiedOn: 'next week' } }
-    assert.deepEqual(validateSprintBacklog([bad]), ['US04: Done status needs "verifiedBy"', 'US04: Done status needs "verifiedOn" as YYYY-MM-DD'])
-  })
-
-  test('validator rejects acceptance that skips the Definition of Done', () => {
-    const bad = { ...base, acceptance: { state: 'accepted' as const, confirmedBy: 'Tutor', confirmedOn: '2026-10-21' } }
-    assert.deepEqual(validateSprintBacklog([bad]), ['US04: marked accepted but the team has not verified it as Done'])
-  })
-
-  test('validator accepts a fully recorded story', () => {
-    const ok = {
-      ...base,
-      dod: { state: 'verified' as const, verifiedBy: 'Team 0311', verifiedOn: '2026-10-20' },
-      acceptance: { state: 'accepted' as const, confirmedBy: 'Tutor', confirmedOn: '2026-10-21' },
+  test('nothing is marked Done or Accepted without its full record', () => {
+    // Whatever the team records, these must hold for every story in the real file.
+    for (const item of SPRINT_BACKLOG) {
+      if (item.completion.state === 'done') {
+        assert.equal(checkedCount(item), DOD_CRITERIA.length, `${item.id} Done needs all DoD checks`)
+        assert.equal(DEFINITION_OF_DONE_STATUS.state, 'agreed', `${item.id} Done needs an agreed DoD`)
+      }
+      if (item.acceptance.state === 'accepted') assert.equal(item.completion.state, 'done', `${item.id} Accepted needs Done`)
     }
-    assert.deepEqual(validateSprintBacklog([ok]), [])
+  })
+
+  // ── Validator rules, on synthetic stories ──
+  const base: BacklogItem = { ...SPRINT_BACKLOG[0], dodChecks: {}, completion: { state: 'awaiting-verification' }, acceptance: { state: 'pending' } }
+  const agreed: DefinitionOfDoneStatus = { state: 'agreed', agreedBy: 'Team 0311', agreedOn: '2026-10-20' }
+  const check: DodCheck = { checkedBy: 'Kai-Po Wang', checkedOn: '2026-10-20' }
+  const allChecks = Object.fromEntries(DOD_CRITERIA.map((c) => [c.id, check])) as Record<DodCriterionId, DodCheck>
+  const done = { state: 'done' as const, verifiedBy: 'Ian Wang', verifiedOn: '2026-10-21' }
+
+  test('a new story starts unchecked and awaiting verification, which is valid', () => {
+    assert.equal(checkedCount(base), 0)
+    assert.deepEqual(validateSprintBacklog([base]), [])
+  })
+
+  test('Done is rejected while any of the seven criteria is unverified', () => {
+    const { testing: _t, ...sixChecks } = allChecks
+    const problems = validateSprintBacklog([{ ...base, dodChecks: sixChecks, completion: done }], agreed)
+    assert.deepEqual(problems, ['US04: marked Done but 1 DoD criteria are not verified (Testing)'])
+  })
+
+  test('Done is rejected without a team member name and a real date', () => {
+    const problems = validateSprintBacklog([{ ...base, dodChecks: allChecks, completion: { state: 'done', verifiedBy: ' ', verifiedOn: '2026-02-30x' } }], agreed)
+    assert.deepEqual(problems, ['US04: Done needs "verifiedBy" (a team member\'s name)', 'US04: Done needs "verifiedOn" as YYYY-MM-DD'])
+  })
+
+  test('impossible dates are rejected, not rolled over', () => {
+    const problems = validateSprintBacklog([{ ...base, dodChecks: allChecks, completion: { ...done, verifiedOn: '2026-02-30' } }], agreed)
+    assert.deepEqual(problems, ['US04: Done needs "verifiedOn" as YYYY-MM-DD'])
+  })
+
+  test('Done is rejected while the Definition of Done is still only proposed', () => {
+    const problems = validateSprintBacklog([{ ...base, dodChecks: allChecks, completion: done }], { state: 'proposed' })
+    assert.deepEqual(problems, ['US04: marked Done before the team has agreed the Definition of Done'])
+  })
+
+  test('each ticked DoD item needs who checked it and when', () => {
+    const problems = validateSprintBacklog([{ ...base, dodChecks: { testing: { checkedBy: '', checkedOn: 'today' } } }], agreed)
+    assert.deepEqual(problems, ['US04: DoD "testing" needs "checkedBy"', 'US04: DoD "testing" needs "checkedOn" as YYYY-MM-DD'])
+  })
+
+  test('an agreed Definition of Done needs who agreed it and when', () => {
+    assert.deepEqual(validateSprintBacklog([base], { state: 'agreed', agreedBy: '', agreedOn: 'soon' }), [
+      'Definition of Done: "agreedBy" is required',
+      'Definition of Done: "agreedOn" must be a YYYY-MM-DD date',
+    ])
+  })
+
+  test('Accepted is rejected unless the story is verified Done', () => {
+    const accepted = { state: 'accepted' as const, confirmedBy: 'MLAI', confirmedOn: '2026-10-22' }
+    assert.deepEqual(validateSprintBacklog([{ ...base, acceptance: accepted }], agreed), ['US04: marked Accepted but not yet verified Done'])
+  })
+
+  test('changes requested can be recorded before Done, with who and when', () => {
+    const cr = { state: 'changes-requested' as const, confirmedBy: 'Tutor', confirmedOn: '2026-10-22', note: 'Show period filter' }
+    assert.deepEqual(validateSprintBacklog([{ ...base, acceptance: cr }], agreed), [])
+  })
+
+  test('a fully verified and accepted story passes', () => {
+    const ok: BacklogItem = { ...base, dodChecks: allChecks, completion: done, acceptance: { state: 'accepted', confirmedBy: 'MLAI', confirmedOn: '2026-10-22' } }
+    assert.deepEqual(validateSprintBacklog([ok], agreed), [])
+    assert.equal(checkedCount(ok), 7)
   })
 })

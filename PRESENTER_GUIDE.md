@@ -85,10 +85,12 @@ That leaves about 80 seconds of buffer before the 5-minute limit. Use it for que
 
 **3:00: Sprint completion summary (~30 s)**
 - *Click* **Sprint summary** (top right).
-- This is our Sprint 1 completion summary. Reading left to right, it keeps five things apart.
-- The four backlog items, 16 points. What the prototype demonstrates. And evidence for each acceptance criterion, ticked off as we just used it.
-- **Definition of Done [CONFIRM]:** say what the column actually shows. If you recorded verified stories, say who checked them. If not: "Done is still awaiting our team's confirmation. The app doesn't mark it automatically."
-- Acceptance stays pending. That's for MLAI and our tutor to decide, not us.
+- This is our Sprint 1 completion summary. We keep three things apart.
+- Demonstrated: all 16 points, which you've just seen.
+- Done: verified against our Definition of Done. These are the seven criteria we proposed, from functionality through to demo readiness.
+- **Done status [CONFIRM]:** say what the page actually shows. If the team has agreed the DoD and verified stories, say how many points and who checked them. If not: "Our Definition of Done is still proposed, and no story is marked Done yet. The app never ticks these automatically. A team member has to record each check with their name and the date."
+- Accepted stays pending. That's for MLAI and our tutor to decide after feedback, not us.
+- (Optional: *click US01* to show its acceptance criteria and seven-item checklist.)
 - What's simulated: login, roles, and data that lives in the browser.
 - What's not built yet: automated quarterly reports, approvals, and live connections to MLAI's platforms.
 - **Inspect and adapt [CONFIRM]:** one thing you'd change in Sprint 2 from your retrospective. Suggestions based on the prototype itself:
@@ -109,7 +111,8 @@ That leaves about 80 seconds of buffer before the 5-minute limit. Use it for que
 | Is the login secure? | No. It's a simulated session to show the flow, and the roles only change what the screen shows. Real authentication is future work. |
 | Why "Startup Participations" and not "Startups Supported"? | It is the A1.2 Startups Supported metric, but our data only has a count per event, so a startup at two events is counted twice. We labelled it honestly. Unique counts need startup IDs. |
 | What if a CSV is broken? | It's checked first. An unmatched quote, a stray quote, the wrong number of columns, or a semicolon-separated file gets a clear message with the line number, and bad rows aren't imported. |
-| Why does it say "Awaiting team confirmation"? | Visiting a screen is only evidence. The team records Done after checking the Definition of Done, and acceptance comes from the client or tutor. |
+| Why is nothing marked Done? | Demonstrating a feature isn't the same as verifying it. A story is Done only when all seven Definition of Done criteria are checked and a team member records their name and the date. Acceptance then comes from the client or tutor. |
+| Can anyone tick the boxes on the website? | No. Official status is git-tracked in the project, and the build rejects a Done story with missing checks, names or dates. |
 | Where does the data come from? | A CSV file. For the demo, a fictional sample. There are no live platform connections yet. |
 | How do we know the numbers are right? | They're sums of the imported rows. The table total matches the cards, and our tests check every sponsor's totals against hand-calculated values. |
 | What if the same event is uploaded twice? | Rows with the same sponsor, event and date are rejected, so they aren't counted twice. |
