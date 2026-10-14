@@ -122,7 +122,7 @@ export default function SponsorsPage() {
                       </p>
                     </div>
                   </div>
-                  <dl className="mt-5 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 px-4 py-3">
+                  <dl className="mt-5 grid grid-cols-3 items-end gap-2 rounded-xl bg-slate-50 px-4 py-3">
                     <div>
                       <dt className="text-xs font-medium text-slate-500">Events</dt>
                       <dd className="mt-0.5 text-xl font-bold tabular-nums text-slate-900">{s.eventsFunded}</dd>
@@ -132,7 +132,7 @@ export default function SponsorsPage() {
                       <dd className="mt-0.5 text-xl font-bold tabular-nums text-slate-900">{formatNumber(s.attendees)}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs font-medium text-slate-500">Startups</dt>
+                      <dt className="text-xs font-medium leading-tight text-slate-500">Startup participations</dt>
                       <dd className="mt-0.5 text-xl font-bold tabular-nums text-slate-900">{formatNumber(s.startupsSupported)}</dd>
                     </div>
                   </dl>

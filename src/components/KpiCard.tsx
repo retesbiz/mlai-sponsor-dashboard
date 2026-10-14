@@ -6,6 +6,7 @@ export function KpiCard({
   value,
   icon: Icon,
   hint,
+  note,
   share,
   animKey,
 }: {
@@ -13,6 +14,8 @@ export function KpiCard({
   value: number
   icon: LucideIcon
   hint: string
+  /** Optional caveat shown under the hint, e.g. how a metric maps to the requirements */
+  note?: string
   /** This sponsor's share of the same metric across all sponsors (0–1) */
   share: number | null
   /** Changing this replays the value animation, so sponsor switches are visible */
@@ -31,6 +34,7 @@ export function KpiCard({
         {formatNumber(value)}
       </p>
       <p className="mt-2 text-xs text-slate-500">{hint}</p>
+      {note && <p className="mt-1 text-xs font-medium leading-snug text-amber-800">{note}</p>}
       {pct !== null && (
         <div className="mt-auto pt-4">
           <div className="h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden>

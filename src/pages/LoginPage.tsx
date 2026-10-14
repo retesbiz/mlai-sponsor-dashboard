@@ -93,7 +93,7 @@ export default function LoginPage() {
             </Button>
             <Button variant="secondary" className="mt-3 w-full !h-11" onClick={() => login('viewer')}>
               <Eye className="size-4" aria-hidden />
-              Enter as Viewer (read-only)
+              Enter as Viewer (simulated read-only)
             </Button>
 
             <div className="mt-8 space-y-2.5 border-t border-slate-100 pt-6 text-sm leading-relaxed text-slate-600">

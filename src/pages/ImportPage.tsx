@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { AlertTriangle, ArrowRight, CheckCircle2, Download, FileSpreadsheet, FileWarning, Inbox, Info, Lock, Sparkles, Trash2, UploadCloud, X } from 'lucide-react'
 import { useAppState, type ImportSummary } from '../state/AppState'
 import { MAX_FILE_BYTES, OPTIONAL_COLUMNS, REQUIRED_COLUMNS, downloadText, parseImpactCsv, recordsToCsv } from '../lib/csv'
@@ -170,7 +170,7 @@ function ValidationPreview({
 }
 
 export default function ImportPage() {
-  const { records, lastImport, isStaff, loadSampleData, importRecords, clearData, notify, navigate } = useAppState()
+  const { records, lastImport, isStaff, loadSampleData, importRecords, clearData, notify, navigate, noteEvidence } = useAppState()
   const [busy, setBusy] = useState<null | 'sample' | 'file'>(null)
   const [dragging, setDragging] = useState(false)
   const [parsed, setParsed] = useState<ParseResult | null>(null)
@@ -179,6 +179,14 @@ export default function ImportPage() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const sponsorCount = useMemo(() => new Set(records.map((r) => r.sponsor)).size, [records])
+
+  // Evidence for the Sprint page (US01): validation problems were reported to the user.
+  useEffect(() => {
+    if (!parsed) return
+    if (parsed.fatal) noteEvidence('validation-shown', `“${parsed.fileName}” was rejected: ${parsed.fatal}`)
+    else if (parsed.errors.length > 0)
+      noteEvidence('validation-shown', `${parsed.errors.length} problem${parsed.errors.length === 1 ? '' : 's'} reported in “${parsed.fileName}”; those rows were not importable.`)
+  }, [parsed, noteEvidence])
 
   const handleSample = () => {
     setBusy('sample')
@@ -237,17 +245,19 @@ export default function ImportPage() {
         eyebrow="US01 · Import sponsor-impact data"
         title="Import Sponsor Data"
         description="Upload a CSV of agreed sponsor-impact records, or load the bundled sample data. Files are read in your browser only — this prototype does not connect to Slack, Luma, Humanitix, Substack or any other MLAI platform."
+        actions={
+          !isStaff && (
+            // Shown in the header (not above the cards) so switching roles never moves the buttons below.
+            <p className="flex max-w-xs items-start gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 shadow-sm" role="status">
+              <Lock className="mt-0.5 size-3.5 shrink-0 text-slate-500" aria-hidden />
+              <span>
+                <span className="font-semibold text-slate-900">Viewer (simulated): read-only.</span> Import and clear are turned off in the UI for this demo
+                role. This is not real access control.
+              </span>
+            </p>
+          )
+        }
       />
-
-      {!isStaff && (
-        <div className="mb-6 flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-          <Lock className="mt-0.5 size-4 shrink-0 text-slate-500" aria-hidden />
-          <p>
-            <span className="font-semibold text-slate-900">Viewer role is read-only.</span> Importing and clearing data is limited to the simulated MLAI
-            Staff role. Switch to MLAI Staff under Simulated role in the sidebar, or log out and enter as staff.
-          </p>
-        </div>
-      )}
 
       {confirmation && <ImportConfirmation summary={confirmation} onDismiss={() => setConfirmation(null)} />}
 
@@ -308,7 +318,13 @@ export default function ImportPage() {
                 </span>
               )}
               <p className="mt-4 text-[0.95rem] font-semibold text-slate-800">
-                {busy === 'file' ? 'Reading and validating file…' : dragging ? 'Drop to upload' : 'Drag and drop a .csv file here'}
+                {busy === 'file'
+                  ? 'Reading and validating file…'
+                  : !isStaff
+                    ? 'Import is off for the simulated Viewer role'
+                    : dragging
+                      ? 'Drop to upload'
+                      : 'Drag and drop a .csv file here'}
               </p>
               <p className="mt-1 text-xs text-slate-500">or</p>
               <Button

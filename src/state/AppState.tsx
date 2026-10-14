@@ -4,6 +4,10 @@ import { clearAll, load, save } from '../lib/storage'
 import { parseImpactCsv, recordKey } from '../lib/csv'
 import { SAMPLE_CSV, SAMPLE_FILE_NAME } from '../data/sample'
 
+/** Things the Sprint page can cite as evidence that only happen through user actions. */
+export type SessionEvidenceFlag = 'viewer-restricted' | 'logged-out' | 'validation-shown' | 'sponsor-selected'
+type SessionEvidence = Partial<Record<SessionEvidenceFlag, string>>
+
 export interface ImportSummary {
   fileName: string
   added: number
@@ -31,6 +35,9 @@ interface AppState {
   /** Sponsors whose dashboard has been displayed with data this session (evidence for the Sprint 1 page) */
   viewedDashboards: string[]
   markDashboardViewed: (sponsor: string) => void
+  /** Session evidence for the Sprint page (detail text per flag). Not a status. */
+  sessionEvidence: SessionEvidence
+  noteEvidence: (flag: SessionEvidenceFlag, detail: string) => void
   login: (role: Role) => void
   logout: () => void
   switchRole: (role: Role) => void
@@ -62,6 +69,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [page, setPage] = useState<Page>(() => load('page', 'import', isPage))
   const [toasts, setToasts] = useState<Toast[]>([])
   const [viewedDashboards, setViewedDashboards] = useState<string[]>(() => load('viewedDashboards', [], Array.isArray))
+  const [sessionEvidence, setSessionEvidence] = useState<SessionEvidence>(() => load('sessionEvidence', {}, (v) => typeof v === 'object' && v !== null))
 
   useEffect(() => save('session', session), [session])
   useEffect(() => save('records', records), [records])
@@ -69,6 +77,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => save('selectedSponsor', selectedSponsor), [selectedSponsor])
   useEffect(() => save('page', page), [page])
   useEffect(() => save('viewedDashboards', viewedDashboards), [viewedDashboards])
+  useEffect(() => save('sessionEvidence', sessionEvidence), [sessionEvidence])
+
+  const noteEvidence = useCallback((flag: SessionEvidenceFlag, detail: string) => {
+    setSessionEvidence((e) => (e[flag] === detail ? e : { ...e, [flag]: detail }))
+  }, [])
+
+  const selectSponsor = useCallback(
+    (sponsor: string | null) => {
+      setSelectedSponsor(sponsor)
+      if (sponsor) noteEvidence('sponsor-selected', sponsor)
+    },
+    [noteEvidence],
+  )
 
   const markDashboardViewed = useCallback((sponsor: string) => {
     setViewedDashboards((v) => (v.includes(sponsor) ? v : [...v, sponsor]))
@@ -86,22 +107,28 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [])
   const dismissToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), [])
 
-  const login = useCallback((role: Role) => {
-    setSession({ name: DEMO_NAMES[role], role, startedAt: new Date().toISOString() })
-    setPage(role === 'staff' ? 'import' : 'sponsors')
-  }, [])
+  const login = useCallback(
+    (role: Role) => {
+      setSession({ name: DEMO_NAMES[role], role, startedAt: new Date().toISOString() })
+      setPage(role === 'staff' ? 'import' : 'sponsors')
+      if (role === 'viewer') noteEvidence('viewer-restricted', 'Entered as Viewer: import and clear controls were disabled.')
+    },
+    [noteEvidence],
+  )
 
   const logout = useCallback(() => {
     setSession(null)
     setPage('import')
-  }, [])
+    noteEvidence('logged-out', 'Logged out and returned to the login screen.')
+  }, [noteEvidence])
 
   const switchRole = useCallback(
     (role: Role) => {
       setSession((s) => (s ? { ...s, role, name: DEMO_NAMES[role] } : s))
-      notify('info', `Simulated role switched to ${role === 'staff' ? 'MLAI Staff' : 'Viewer'}.`)
+      notify('info', `Simulated role switched to ${role === 'staff' ? 'MLAI Staff' : 'Viewer'} (demo only, not real access control).`)
+      if (role === 'viewer') noteEvidence('viewer-restricted', 'Switched to Viewer: import and clear controls were disabled.')
     },
-    [notify],
+    [notify, noteEvidence],
   )
 
   const importRecords = useCallback(
@@ -134,6 +161,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setLastImport(null)
     setSelectedSponsor(null)
     setViewedDashboards([])
+    setSessionEvidence((e) => {
+      const { 'sponsor-selected': _s, ...rest } = e
+      return rest
+    })
   }, [])
 
   const resetDemo = useCallback(() => {
@@ -142,6 +173,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setLastImport(null)
     setSelectedSponsor(null)
     setViewedDashboards([])
+    setSessionEvidence({})
     setSession(null)
     setPage('import')
   }, [])
@@ -157,11 +189,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       isStaff: session?.role === 'staff',
       viewedDashboards,
       markDashboardViewed,
+      sessionEvidence,
+      noteEvidence,
       login,
       logout,
       switchRole,
       navigate: setPage,
-      selectSponsor: setSelectedSponsor,
+      selectSponsor,
       loadSampleData,
       importRecords,
       clearData,
@@ -169,7 +203,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       notify,
       dismissToast,
     }),
-    [session, records, lastImport, selectedSponsor, page, toasts, viewedDashboards, markDashboardViewed, login, logout, switchRole, loadSampleData, importRecords, clearData, resetDemo, notify, dismissToast],
+    [session, records, lastImport, selectedSponsor, page, toasts, viewedDashboards, markDashboardViewed, sessionEvidence, noteEvidence, selectSponsor, login, logout, switchRole, loadSampleData, importRecords, clearData, resetDemo, notify, dismissToast],
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

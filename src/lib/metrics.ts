@@ -74,9 +74,11 @@ export const METRICS: { key: MetricKey; label: string; short: string; descriptio
   { key: 'attendees', label: 'Total Attendees', short: 'Attendees', description: 'Sum of recorded attendees across sponsored events.' },
   {
     key: 'startupsSupported',
-    label: 'Startups Supported',
-    short: 'Startups',
-    description: 'Sum of startups supported per event. A startup involved in two events is counted at each event.',
+    // A1.2 metric "Startups Supported". The data has no startup IDs, so this is a per-event total, not a unique count.
+    label: 'Startup Participations',
+    short: 'Startup participations',
+    description:
+      'Per-event total for the A1.2 “Startups Supported” metric: startups recorded at each event, added up. A startup at two events is counted twice, so this is not a count of unique startups.',
   },
   { key: 'mediaReach', label: 'Media Reach', short: 'Media reach', description: 'Sum of reported impressions/reach for event promotion and coverage.' },
   {

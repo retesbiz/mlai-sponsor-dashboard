@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { BarChart3, Building2, ClipboardList, Database, LogOut, Menu, RotateCcw, ShieldCheck, X, CheckCircle2, Info, AlertCircle } from 'lucide-react'
+import { BarChart3, Building2, ClipboardList, Database, LogOut, Menu, RotateCcw, ShieldCheck, X, CheckCircle2, Info, AlertCircle, ShieldAlert } from 'lucide-react'
 import { useAppState } from '../state/AppState'
 import type { Page, Role } from '../types'
 import { Button, ConfirmDialog, MlaiMark } from './ui'
@@ -15,7 +15,7 @@ export const PAGE_TITLES: Record<Page, string> = {
   import: 'Import Sponsor Data',
   sponsors: 'Sponsors',
   dashboard: 'Impact Dashboard',
-  sprint: 'Sprint 1 Demo',
+  sprint: 'Sprint 1 Summary',
 }
 
 function NavItem({ page: p, label, icon: Icon, tag, onNavigate }: { page: Page; label: string; icon: typeof Database; tag?: string; onNavigate: () => void }) {
@@ -71,7 +71,7 @@ function Sidebar({ onNavigate, onReset }: { onNavigate: () => void; onReset: () 
         </ul>
         <p className="mt-7 px-3 pb-2 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-slate-500">Project</p>
         <ul className="space-y-1">
-          <NavItem page="sprint" label="Sprint 1 Demo" icon={ClipboardList} onNavigate={onNavigate} />
+          <NavItem page="sprint" label="Sprint 1 Summary" icon={ClipboardList} onNavigate={onNavigate} />
         </ul>
       </nav>
 
@@ -96,7 +96,7 @@ function Sidebar({ onNavigate, onReset }: { onNavigate: () => void; onReset: () 
         {session && (
           <div>
             <p id="role-label" className="mb-1.5 px-1 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Simulated role
+              Simulated role · demo only
             </p>
             <div role="group" aria-labelledby="role-label" className="grid grid-cols-2 gap-1 rounded-lg bg-white/[0.04] p-1 ring-1 ring-white/[0.06]">
               {(['staff', 'viewer'] as Role[]).map((r) => (
@@ -117,7 +117,7 @@ function Sidebar({ onNavigate, onReset }: { onNavigate: () => void; onReset: () 
         )}
         <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-slate-500">
           <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-slate-500" aria-hidden />
-          Simulated session. No real sign-in or MLAI system connections.
+          Role switch only changes what the UI shows. Not real security: no real sign-in, access control or MLAI system connections.
         </p>
         <button
           type="button"
@@ -146,10 +146,16 @@ function ProfileIndicator() {
         </span>
         <span className="hidden leading-tight xl:block">
           <span className="block text-sm font-medium text-slate-900">{session.name}</span>
-          <span className="block text-xs text-slate-500">{roleLabel} · demo session</span>
+          <span className="block text-xs text-slate-500">{roleLabel} · simulated session</span>
         </span>
         <span className="text-xs font-semibold text-slate-700 xl:hidden">{roleLabel}</span>
       </div>
+      <span
+        className="hidden items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[0.7rem] font-semibold uppercase tracking-wide text-amber-900 xl:inline-flex"
+        title="Demo session only: no password, no real authentication or authorisation"
+      >
+        <ShieldAlert className="size-3.5" aria-hidden /> Simulated sign-in
+      </span>
       <Button variant="ghost" size="sm" onClick={logout} aria-label="Log out of demo session" title="Log out">
         <LogOut className="size-4" aria-hidden />
         <span className="hidden 2xl:inline">Log out</span>

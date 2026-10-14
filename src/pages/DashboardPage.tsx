@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, BarChart3, Building2, CalendarDays, Database, Info, Megaphone, MessagesSquare, Rocket, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BarChart3, Building2, CalendarDays, Database, Info, Megaphone, MessagesSquare, Rocket, Users } from 'lucide-react'
 import { useAppState } from '../state/AppState'
 import { METRICS, availableQuarters, computeTotals, quarterLabel, quarterOf, quarterRange, summariseSponsors } from '../lib/metrics'
 import { formatDate } from '../lib/format'
@@ -113,6 +113,9 @@ export default function DashboardPage() {
           <Button onClick={() => navigate('import')}>
             <Database className="size-4" aria-hidden /> Import data
           </Button>
+          <Button variant="primary" onClick={() => navigate('sprint')}>
+            Sprint summary <ArrowRight className="size-4" aria-hidden />
+          </Button>
         </>
       }
     />
@@ -217,7 +220,15 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:gap-5">
             <KpiCard label="Events Funded" value={totals.eventsFunded} icon={CalendarDays} hint="Sponsored events in period" share={share('eventsFunded')} animKey={animKey} />
             <KpiCard label="Total Attendees" value={totals.attendees} icon={Users} hint="Sum across events" share={share('attendees')} animKey={animKey} />
-            <KpiCard label="Startups Supported" value={totals.startupsSupported} icon={Rocket} hint="Sum of per-event counts" share={share('startupsSupported')} animKey={animKey} />
+            <KpiCard
+              label="Startup Participations"
+              value={totals.startupsSupported}
+              icon={Rocket}
+              hint="A1.2 “Startups Supported”, per-event total"
+              note="Not unique startups: one at 2 events counts twice"
+              share={share('startupsSupported')}
+              animKey={animKey}
+            />
             <KpiCard label="Media Reach" value={totals.mediaReach} icon={Megaphone} hint="Reported impressions" share={share('mediaReach')} animKey={animKey} />
             <KpiCard
               label="Community Engagement"
@@ -286,7 +297,8 @@ export default function DashboardPage() {
           <p className="mt-5 max-w-5xl text-xs leading-relaxed text-slate-500">
             <span className="font-semibold text-slate-600">How metrics are calculated:</span> Events Funded counts imported records for this sponsor in the
             selected period (one record = one event; duplicate sponsor + event + date rows are rejected at import). Every other metric is the sum of the
-            matching CSV column across those same records. "% of all sponsors" compares against all imported sponsors in the same period. All figures
+            matching CSV column across those same records. Startup Participations is the A1.2 “Startups Supported” metric counted per event:
+            the data has no startup identifiers, so a startup involved in several events is counted once per event, not once overall. "% of all sponsors" compares against all imported sponsors in the same period. All figures
             are fictional demonstration data.
           </p>
         </>

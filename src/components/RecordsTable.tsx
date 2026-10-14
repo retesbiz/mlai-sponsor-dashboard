@@ -34,7 +34,9 @@ export function RecordsTable({
             {showSponsor && <th scope="col" className={th}>Sponsor</th>}
             <th scope="col" className={th}>Type</th>
             <th scope="col" className={thNum}>Attendees</th>
-            <th scope="col" className={thNum}>Startups</th>
+            <th scope="col" className={thNum} title="Per-event count; a startup at several events is counted at each">
+              Startup participations
+            </th>
             <th scope="col" className={thNum}>Media reach</th>
             <th scope="col" className={thNum}>Engagement</th>
           </tr>

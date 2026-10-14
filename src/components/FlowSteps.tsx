@@ -4,11 +4,13 @@ import type { Page } from '../types'
 
 /** The core Sprint 1 flow, shown in the top bar so the audience always knows where we are. */
 export function FlowSteps() {
-  const { page, navigate, records, selectedSponsor } = useAppState()
-  const steps: { page: Page; label: string; done: boolean; detail?: string }[] = [
-    { page: 'import', label: 'Import data', done: records.length > 0, detail: records.length ? `${records.length} records` : undefined },
-    { page: 'sponsors', label: 'Select sponsor', done: !!selectedSponsor, detail: selectedSponsor ?? undefined },
-    { page: 'dashboard', label: 'View dashboard', done: false },
+  const { page, navigate, records, selectedSponsor, viewedDashboards } = useAppState()
+  // Labels only: record counts and the selected sponsor are already shown in the sidebar and page headers.
+  const steps: { page: Page; label: string; short: string; done: boolean }[] = [
+    { page: 'import', label: 'Import data', short: 'Import', done: records.length > 0 },
+    { page: 'sponsors', label: 'Select sponsor', short: 'Sponsor', done: !!selectedSponsor },
+    { page: 'dashboard', label: 'View dashboard', short: 'Dashboard', done: viewedDashboards.length > 0 },
+    { page: 'sprint', label: 'Sprint summary', short: 'Summary', done: false },
   ]
 
   return (
@@ -38,10 +40,9 @@ export function FlowSteps() {
                 >
                   {s.done ? <Check className="size-3.5" strokeWidth={3} aria-hidden /> : i + 1}
                 </span>
-                <span className="whitespace-nowrap font-medium">{s.label}</span>
-                {s.detail && (
-                  <span className={`hidden max-w-40 truncate text-xs 2xl:inline ${current ? 'text-slate-300' : 'text-slate-500'}`}>· {s.detail}</span>
-                )}
+                {/* Short labels on laptops so all four steps fit beside the profile; full labels on wide screens/projectors */}
+                <span className="whitespace-nowrap font-medium 2xl:hidden">{s.short}</span>
+                <span className="hidden whitespace-nowrap font-medium 2xl:inline">{s.label}</span>
               </button>
             </li>
           )

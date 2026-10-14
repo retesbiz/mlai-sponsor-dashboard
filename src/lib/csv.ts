@@ -15,13 +15,52 @@ export const OPTIONAL_COLUMNS = ['event_type', 'location'] as const
 export const MAX_FILE_BYTES = 2 * 1024 * 1024
 export const MAX_ROWS = 5000
 
-/** RFC 4180-style CSV tokenizer: handles quoted fields, escaped quotes, CRLF and a UTF-8 BOM. */
-export function tokenizeCsv(text: string): string[][] {
-  const src = text.replace(/^﻿/, '')
-  const rows: string[][] = []
-  let row: string[] = []
+export interface CsvRow {
+  cells: string[]
+  /** 1-based line number where this row starts in the file */
+  line: number
+  /** First formatting problem found in this row, if any */
+  issue?: string
+}
+
+export interface CsvScan {
+  rows: CsvRow[]
+  /** Line where a quoted value was opened but never closed (makes the rest of the file unreadable) */
+  unclosedQuoteLine: number | null
+}
+
+const STRAY_QUOTE = (line: number) =>
+  `Unexpected quotation mark (") inside an unquoted value on line ${line}. If a value contains quotes, wrap the whole value in quotes and double the inner ones, e.g. "Talk ""AI"" night".`
+const TEXT_AFTER_QUOTE = (line: number) =>
+  `Unexpected text after a closing quotation mark on line ${line}. Put a comma straight after the closing quote, or wrap the whole value in quotes.`
+
+/**
+ * RFC 4180-style CSV scanner. Handles quoted fields (including commas and line breaks inside quotes),
+ * escaped quotes (""), CRLF and a UTF-8 BOM, and reports malformed quoting instead of guessing.
+ */
+export function scanCsv(text: string): CsvScan {
+  const src = text.replace(/^\uFEFF/, '')
+  const rows: CsvRow[] = []
+  let cells: string[] = []
   let field = ''
   let inQuotes = false
+  let closedQuote = false // the current field was quoted and its closing quote has been read
+  let line = 1
+  let rowStart = 1
+  let quoteOpenLine = 0
+  let issue: string | undefined
+
+  const endField = () => {
+    cells.push(field)
+    field = ''
+    closedQuote = false
+  }
+  const endRow = () => {
+    endField()
+    rows.push({ cells, line: rowStart, issue })
+    cells = []
+    issue = undefined
+  }
 
   for (let i = 0; i < src.length; i++) {
     const ch = src[i]
@@ -32,29 +71,55 @@ export function tokenizeCsv(text: string): string[][] {
           i++
         } else {
           inQuotes = false
+          closedQuote = true
         }
+      } else if (ch === '\r' || ch === '\n') {
+        if (ch === '\r' && src[i + 1] === '\n') i++
+        field += '\n'
+        line++
       } else {
         field += ch
       }
       continue
     }
-    if (ch === '"') inQuotes = true
-    else if (ch === ',') {
-      row.push(field)
-      field = ''
+
+    if (ch === ',') {
+      endField()
     } else if (ch === '\n' || ch === '\r') {
       if (ch === '\r' && src[i + 1] === '\n') i++
-      row.push(field)
-      rows.push(row)
-      row = []
-      field = ''
-    } else field += ch
+      endRow()
+      line++
+      rowStart = line
+    } else if (closedQuote) {
+      // Only separators (or harmless spaces) may follow a closing quote.
+      if (ch !== ' ' && ch !== '\t') {
+        issue ??= TEXT_AFTER_QUOTE(line)
+        field += ch
+        closedQuote = false
+      }
+    } else if (ch === '"') {
+      if (field.trim() === '') {
+        // Opening quote (leading spaces before it are ignored).
+        field = ''
+        inQuotes = true
+        quoteOpenLine = line
+      } else {
+        issue ??= STRAY_QUOTE(line)
+        field += ch
+      }
+    } else {
+      field += ch
+    }
   }
-  if (field !== '' || row.length > 0) {
-    row.push(field)
-    rows.push(row)
-  }
-  return rows
+
+  if (inQuotes) return { rows, unclosedQuoteLine: quoteOpenLine }
+  if (field !== '' || cells.length > 0 || closedQuote) endRow()
+  return { rows, unclosedQuoteLine: null }
+}
+
+/** Cells only — kept for callers that don't need line numbers or format issues. */
+export function tokenizeCsv(text: string): string[][] {
+  return scanCsv(text).rows.map((r) => r.cells)
 }
 
 export function normaliseHeader(h: string): string {
@@ -105,18 +170,41 @@ const NUMERIC_FIELDS = [
 
 export function parseImpactCsv(text: string, fileName: string): ParseResult {
   const result: ParseResult = { fileName, totalRows: 0, valid: [], errors: [], fatal: null, duplicatesInFile: 0 }
-  const rows = tokenizeCsv(text)
-  // Track original line numbers while dropping fully blank lines.
-  const lines = rows
-    .map((cells, idx) => ({ cells, line: idx + 1 }))
-    .filter(({ cells }) => cells.some((c) => c.trim() !== ''))
+  if (text.includes('\u0000')) {
+    result.fatal = 'This doesn’t look like a text CSV file (it contains binary data). Export the sheet as “CSV (comma-separated)” and try again.'
+    return result
+  }
+
+  const scan = scanCsv(text)
+  if (scan.unclosedQuoteLine !== null) {
+    result.fatal = `Unmatched quotation mark: a quoted value that starts on line ${scan.unclosedQuoteLine} is never closed, so the rest of the file can’t be read. Add the missing closing quote (") and upload the file again.`
+    return result
+  }
+  // Drop fully blank lines but keep their original line numbers for messages.
+  const lines = scan.rows.filter(({ cells, issue }) => issue || cells.some((c) => c.trim() !== ''))
 
   if (lines.length === 0) {
     result.fatal = 'The file is empty.'
     return result
   }
 
-  const header = lines[0].cells.map(normaliseHeader)
+  const headerRow = lines[0]
+  if (headerRow.issue) {
+    result.fatal = `The header row is malformed. ${headerRow.issue}`
+    return result
+  }
+  if (headerRow.cells.length === 1 && /[;\t|]/.test(headerRow.cells[0])) {
+    const sep = headerRow.cells[0].includes(';') ? 'semicolons' : headerRow.cells[0].includes('\t') ? 'tabs' : 'vertical bars'
+    result.fatal = `The file seems to use ${sep} to separate values. Save it as “CSV (comma-separated)” and upload it again.`
+    return result
+  }
+
+  const header = headerRow.cells.map(normaliseHeader)
+  const dupes = [...new Set(header.filter((h, i) => h && header.indexOf(h) !== i))]
+  if (dupes.length > 0) {
+    result.fatal = `Column${dupes.length > 1 ? 's' : ''} ${dupes.map((d) => `“${d}”`).join(', ')} appear${dupes.length > 1 ? '' : 's'} more than once in the header row. Each column name must be unique.`
+    return result
+  }
   const missing = REQUIRED_COLUMNS.filter((c) => !header.includes(c))
   if (missing.length > 0) {
     result.fatal = `Missing required column${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}.`
@@ -137,7 +225,19 @@ export function parseImpactCsv(text: string, fileName: string): ParseResult {
   const seen = new Set<string>()
   result.totalRows = dataLines.length
 
-  for (const { cells, line } of dataLines) {
+  for (const { cells, line, issue } of dataLines) {
+    if (issue) {
+      result.errors.push({ line, field: 'csv format', message: issue })
+      continue
+    }
+    if (cells.length !== header.length) {
+      result.errors.push({
+        line,
+        field: 'csv format',
+        message: `Line ${line} has ${cells.length} value${cells.length === 1 ? '' : 's'} but the header has ${header.length} columns. Check for an unquoted comma (e.g. in an event name or "1,200") or a missing value.`,
+      })
+      continue
+    }
     const get = (name: string) => {
       const i = col(name)
       return i >= 0 ? (cells[i] ?? '').trim() : ''
