@@ -9,7 +9,10 @@ Team 0311 · MLAI Sponsor & Impact Reporting Dashboard · FIT2002 Week 11
 ## 1. The day before
 
 - [ ] `npm install` and `npm test` pass (22 tests: import, validation, KPI totals, sponsor switching).
-- [ ] `npm run demo` builds and serves the app at **http://localhost:4173**. Use this production build for the demo: it loads faster than `npm run dev` and has no developer overlays. `npm run dev` (port 5173) is the fallback.
+- [ ] Choose how you'll run it:
+  - **Hosted (no setup):** https://retesbiz.github.io/mlai-sponsor-dashboard/. Needs internet on the demo computer. The app makes no other network requests once it has loaded.
+  - **Local (no internet needed):** `npm run demo` serves the production build at **http://localhost:4173**. `npm run dev` (port 5173) is a further fallback.
+  - Keep the other option ready as a backup.
 - [ ] Do one full timed rehearsal with all three speakers, using a stopwatch.
 - [ ] Decide who drives the mouse. Suggestion: one person drives the whole time, and speakers say "next" instead of swapping laptops.
 - [ ] Agree on a backup in case the laptop or projector fails, such as screenshots or a short screen recording. **(Team to decide.)**
@@ -19,7 +22,7 @@ Team 0311 · MLAI Sponsor & Impact Reporting Dashboard · FIT2002 Week 11
 
 - [ ] Laptop on power. Notifications and Do Not Disturb off. Close Slack, email and any other tabs.
 - [ ] Projector at **1920×1080** if possible. Browser zoom at **100%**. Text scales up automatically at this width.
-- [ ] Open http://localhost:4173 and go full-screen (macOS `Ctrl+Cmd+F`, Windows `F11`).
+- [ ] Open the hosted URL (or http://localhost:4173) and go full-screen (macOS `Ctrl+Cmd+F`, Windows `F11`).
 - [ ] If you see anything other than the login screen, click **Reset demo** (sidebar, bottom), then **Reset demo** in the dialog.
 - [ ] Check: login screen visible, no data loaded, mouse pointer visible on the projector.
 
@@ -74,7 +77,8 @@ If you also imported the 2 valid rows from the errors file, totals change: Acme 
 | Dashboard says "Choose a sponsor" | Click a sponsor button in the empty state. It goes straight to the dashboard |
 | Dashboard says "No events in this period" | Click **Show all dates** |
 | Page refreshed by accident | Data, selected sponsor and page are kept. Carry on |
-| Browser or server crashed | Run `npm run demo` again (≈ 5 s) and reopen http://localhost:4173, or switch to the backup |
+| Browser or server crashed | Reopen the hosted URL, or run `npm run demo` again (≈ 5 s) and open http://localhost:4173 |
+| Classroom Wi-Fi is down | Use the local option: `npm run demo` → http://localhost:4173 |
 | Running out of time at step 11 | Skip step 12. Say the limitations out loud (presenter guide, Sabiuddin) |
 
 ---

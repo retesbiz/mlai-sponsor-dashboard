@@ -6,6 +6,12 @@ A front-end prototype of a centralised reporting layer for MLAI. An authorised u
 
 > **Demonstration only.** All data is fictional. Sign-in is a simulated session, and nothing connects to any MLAI platform. See [PROTOTYPE_LIMITATIONS.md](PROTOTYPE_LIMITATIONS.md).
 
+## Live demo
+
+**https://retesbiz.github.io/mlai-sponsor-dashboard/**
+
+The site is hosted on GitHub Pages and redeploys automatically on every push to `main` (see `.github/workflows/deploy.yml`, which installs, runs `npm test`, builds and publishes `dist/`). Each browser keeps its own demo data, so use **Reset demo** for a clean start.
+
 ## Requirements
 
 - Node.js 20.19+ or 22.12+ to run the app; 22.18+ to run `npm test`
