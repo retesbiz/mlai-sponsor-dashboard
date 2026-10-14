@@ -10,7 +10,7 @@ Team 0311 · MLAI Sponsor & Impact Reporting Dashboard · FIT2002 Week 11
 
 ## 1. The day before
 
-- [ ] `npm install`, then `npm test` (59 tests), `npm run typecheck` and `npm run build` all pass.
+- [ ] `npm install`, then `npm test` (65 tests), `npm run typecheck` and `npm run build` all pass.
 - [ ] Choose how you'll run it:
   - **Hosted (no setup):** https://retesbiz.github.io/mlai-sponsor-dashboard/. Needs internet on the demo computer. The app makes no other network requests once it has loaded.
   - **Local (no internet needed):** `npm run demo` serves the production build at **http://localhost:4173**. `npm run dev` (port 5173) is a further fallback.
@@ -49,7 +49,7 @@ Team 0311 · MLAI Sponsor & Impact Reporting Dashboard · FIT2002 Week 11
 | 7 | 1:45 | Sabiuddin | *(point at KPI cards)* | **4 · 505 · 33 · 32,900 · 1,540**. The third card is **Startup Participations**, with the note "Not unique startups". Amber "Demonstration data" label | US03 |
 | 8 | 2:15 | Sabiuddin | **Engagement** (button above the left chart) | Bars 340 / 260 / 510 / 430. Comparison chart shows Community Engagement | US03 |
 | 9 | 2:30 | Sabiuddin | Under **Switch sponsor**: **Northstar Innovations** | Header, KPIs, charts and table all change: **4 · 750 · 63 · 56,700 · 2,610** | US03 |
-| 10 | 2:50 | Sabiuddin | **Sprint summary →** (top right of the dashboard) | **Sprint 1 Completion Summary**: tiles for **Done x / 16 SP**, Demonstrated 16 / 16 and Accepted. Below them, **Sprint 1 Definition of Done — Measurable Criteria** ("Proposed — Awaiting Team Confirmation") and the story completion table. Shows exactly what the team recorded (default: 0 checks passed, 0/7 conditions, Awaiting Verification, Pending). Optional: click **US03** to show its measurable checks. Each says "Demonstrated this session" but stays **Not Verified** | All |
+| 10 | 2:50 | Sabiuddin | **Sprint summary →** (top right of the dashboard) | **Sprint 1 Completion Summary**: tiles for **Done x / 16 SP**, Demonstrated 16 / 16 and Accepted. Below them, **Sprint 1 Definition of Done — Measurable Criteria** ("Proposed — Awaiting Team Confirmation") and the story completion table. Shows exactly what the team recorded (default: 0 checks passed, 0/7 conditions, Awaiting Verification, Pending). Optional: click **US03** to show its proposed checks (required 6/6). Most say "Demonstrated this session" but stay **Not Verified** with "Evidence: none recorded" | All |
 | 11 | 3:30 | Sabiuddin | *(close)* | | |
 
 **Optional extras (only if ahead of time):**
@@ -99,31 +99,35 @@ The **Sprint 1 Completion Summary** keeps three concepts separate:
 | Concept | Meaning | Who decides | Shown as |
 |---|---|---|---|
 | **Demonstrated** | Functionality shown in the prototype during the demo | The prototype | "Demonstrated" tile (16 / 16). Per-criterion session evidence in the expanded story view. **Evidence only, never status** |
-| **Done** | All 7 measurable Definition of Done conditions verified and recorded, including 100% of the story's verification checks recorded as Pass | The team | "Done x / 16 SP", checks passed and conditions met per story, **Awaiting Verification / Not Done · failed checks / Done** |
+| **Done** | All 7 measurable DoD conditions recorded as Pass with evidence, including n/n of the story's required checks | The team | "Done x / 16 SP", checks passed and conditions met per story, **Awaiting Verification / Not Done · failed checks / Done** |
 | **Accepted** | Client or tutor confirmation after actual feedback | Client / tutor | **Pending / Accepted / Changes Requested** |
 
 The seven measurable conditions (Acceptance Criteria, Functional Testing, Integration, Data Accuracy, Usability, Team Verification, Demo Readiness) appear as **Sprint 1 Definition of Done — Measurable Criteria**, labelled **Proposed — Awaiting Team Confirmation** until the team records that it agreed them. **[CONFIRM]** Don't say this DoD was agreed at Sprint Planning unless that's true.
 
 **To record verification** (only after it has really happened), edit `src/data/sprintStatus.ts`. Visitors to the website can't change status. It only changes by commit:
 
-1. **Agree the Definition of Done (only if the team actually agrees it).** Set
-   `DEFINITION_OF_DONE_STATUS = { state: 'agreed', agreedOn: 'YYYY-MM-DD', agreedBy: '…' }`. Until then the page shows **Sprint 1 Definition of Done — Measurable Criteria** labelled **Proposed — Awaiting Team Confirmation**.
-2. **Record who implemented each story:** `implementedBy: ['…']` (needed for the Usability rule).
-3. **Record each story verification check after running it:** `checkResults: { 'us01-valid-import': { result: 'pass', checkedBy, checkedOn }, … }`. A Fail needs a `note` (e.g. defect reference). Unrecorded checks show **Not Verified**.
-4. **Record DoD conditions 2, 3, 4, 5 and 7 for the story:** `dodResults: { 'functional-testing': { result: 'pass', checkedBy, checkedOn, note: '12/12 cases, 0 critical defects' }, … }`. Only Data Accuracy may be `not-applicable`, and it needs a `reason`. Usability must be checked by someone **not** in `implementedBy`.
-   - Condition 1 (Acceptance Criteria) is **derived**: Pass only when 100% of the story's checks are recorded Pass.
+1. **Confirm the checks and agree the DoD (only if the team actually does).**
+   `VERIFICATION_CHECKS_STATUS = { state: 'confirmed', confirmedOn, confirmedBy }` and `DEFINITION_OF_DONE_STATUS = { state: 'agreed', agreedOn, agreedBy }`. Until then the page shows **Proposed — awaiting team confirmation** on both.
+2. **Record who implemented each story:** `implementedBy: ['…']` (needed for the Usability condition).
+3. **Record each story check after running it, with evidence:**
+   `checkResults: { 'us01-sample-11': { result: 'pass', checkedBy, checkedOn, evidence: 'Load Sample Data → "11 sponsor-impact records imported", 3 sponsors' }, … }`.
+   `result` is `pass` or `fail`, and `evidence` (what was done or observed, e.g. test case ID, screenshot, defect ref) is required. Unrecorded checks show **Not Verified**.
+4. **Record DoD conditions 2, 3, 4, 5 and 7 the same way, in `dodResults`**, e.g.
+   `'functional-testing': { result: 'pass', checkedBy, checkedOn, evidence: 'TC-01–TC-05 pass; defect log: 0 critical' }`.
+   Usability must be checked by someone **not** in `implementedBy`.
+   - Condition 1 (Acceptance Criteria) is **derived**: Pass only when 100% of the story's required checks (n/n) are recorded Pass.
    - Condition 6 (Team Verification) is **derived** from step 5.
 5. **Mark Done only when every check and condition passes:** `completion: { state: 'done', verifiedBy, verifiedOn, confirmation: 'All required checks passed' }`. Otherwise it stays `{ state: 'awaiting-verification' }`.
 6. **Record client/tutor acceptance only after explicit feedback:** `acceptance: { state: 'accepted' | 'changes-requested', confirmedBy, confirmedOn, note? }`. Default `{ state: 'pending' }`. Accepted requires Done.
 
 `npm test`, and therefore the GitHub Pages deploy, fails if:
-- Done is recorded with any check or condition not passed, or before the DoD is agreed.
+- Done is recorded with fewer than n/n checks passed, any DoD condition not passed, the checks still proposed, or the DoD not agreed.
 - `implementedBy` is missing, or Usability was checked by the implementer.
-- Any result is missing a name, real date, Fail note or N/A reason.
+- Any result is missing Pass/Fail, a name, a real date or evidence.
 - The verification date is before the checks it confirms.
 - Accepted comes before Done.
 
-Automated test runs, page visits and clicks never record a result.
+Automated test runs, page visits and clicks never record a result. "Demonstrated this session" on a check is demonstration evidence, kept separate from formal evidence.
 
 The acceptance criteria in that file are **drafts written from the Sprint 1 scope** (`criteriaSource: 'draft'`, shown on screen as "Draft criteria"). Replace them with your Product Backlog wording and set `criteriaSource: 'product-backlog'`. **[CONFIRM]**
 
@@ -150,6 +154,8 @@ The acceptance criteria in that file are **drafts written from the Sprint 1 scop
 - [ ] Whether the team agrees the proposed seven-criterion Definition of Done (then record `agreed`, with who and when).
 - [ ] For each story, which DoD criteria have actually been checked, by whom and when. Only then mark it Done.
 - [ ] Anything carried over to Sprint 2 (leave it Awaiting Verification and add a `note`).
+- [ ] Whether the team confirms the proposed story checks (US04 5/5, US01 5/5, US02 4/4, US03 6/6), or keeps the original backlog acceptance criteria where they differ.
+- [ ] **Verification run order:** Reset demo → US04 checks → Load Sample Data (US01-1) → US02 and US03 checks on the unchanged sample → then US01 checks 2–5 with `mlai-verification-six-new-records.csv` (it changes the totals).
 - [ ] Sprint progress evidence you want to mention: burndown, task board, hours, velocity.
 - [ ] Any feedback or acceptance MLAI or your tutor has actually given, with dates.
 - [ ] Who your Product Owner is.

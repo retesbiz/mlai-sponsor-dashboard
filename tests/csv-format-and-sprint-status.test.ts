@@ -8,23 +8,26 @@ import { parseImpactCsv, scanCsv } from '../src/lib/csv.ts'
 import { METRICS, computeTotals } from '../src/lib/metrics.ts'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { recordKey } from '../src/lib/csv.ts'
 import { summariseSponsors } from '../src/lib/metrics.ts'
 import {
   DEFINITION_OF_DONE_STATUS,
   DOD_CRITERIA,
   RECORDED_DOD_IDS,
+  SIX_RECORD_FIXTURE,
   SPRINT,
   SPRINT_BACKLOG,
+  VERIFICATION_CHECKS_STATUS,
   checkCounts,
   conditionCounts,
   conditionStatus,
   overallStatus,
   validateSprintBacklog,
   type BacklogItem,
-  type CheckResult,
+  type ChecksStatus,
   type DefinitionOfDoneStatus,
-  type DodResult,
   type RecordedDodId,
+  type RecordedResult,
 } from '../src/data/sprintStatus.ts'
 
 const HEADER = 'sponsor,event,date,attendees,startups_supported,media_reach,community_engagement'
@@ -131,7 +134,9 @@ describe('Startup Participations metric (US03, A1.2 “Startups Supported”)', 
   })
 })
 
-describe('Sprint 1 backlog and measurable Definition of Done', () => {
+const repoFile = (p: string) => readFileSync(fileURLToPath(new URL(`../${p}`, import.meta.url)), 'utf8')
+
+describe('Sprint 1 backlog: proposed measurable checks and Definition of Done', () => {
   test('backlog matches Sprint Planning: US04, US01, US02, US03 = 16 of 18 SP', () => {
     assert.deepEqual(
       SPRINT_BACKLOG.map((s) => [s.id, s.title, s.points]),
@@ -145,43 +150,75 @@ describe('Sprint 1 backlog and measurable Definition of Done', () => {
     assert.equal(SPRINT.capacity, 18)
   })
 
-  test('the DoD has the seven measurable conditions, in order', () => {
+  test('each story requires all of its checks: 5/5, 5/5, 4/4, 6/6', () => {
     assert.deepEqual(
-      DOD_CRITERIA.map((c) => c.title),
-      ['Acceptance Criteria', 'Functional Testing', 'Integration', 'Data Accuracy', 'Usability', 'Team Verification', 'Demo Readiness'],
+      SPRINT_BACKLOG.map((s) => [s.id, checkCounts(s).required, s.verificationChecks.length]),
+      [
+        ['US04', 5, 5],
+        ['US01', 5, 5],
+        ['US02', 4, 4],
+        ['US03', 6, 6],
+      ],
     )
-    // Measurable wording: quantities or explicit pass conditions, not general statements.
-    assert.match(DOD_CRITERIA[0].text, /100%.*Pass/)
-    assert.match(DOD_CRITERIA[1].text, /100%.*zero unresolved critical defects/)
-    assert.match(DOD_CRITERIA[2].text, /authorised access → data import → sponsor selection → impact dashboard/)
-    assert.match(DOD_CRITERIA[4].text, /other than the feature’s implementer/)
-    assert.match(DOD_CRITERIA[6].text, /zero broken required interactions/)
   })
 
-  test('the DoD is still a proposal, and nothing is recorded as passed, Done or Accepted', () => {
-    // Guard against accidentally committing invented verification. Update this test deliberately
-    // when the team actually records results.
+  test('check wording is the requested measurable wording', () => {
+    const text = (id: string) => SPRINT_BACKLOG.find((s) => s.id === id)!.verificationChecks.map((c) => c.text)
+    assert.deepEqual(text('US04'), [
+      'Selecting Enter Demo as MLAI Staff enters the application and displays the Staff role.',
+      'Before signing in, the four main application screens are inaccessible through normal navigation.',
+      'Switching to Viewer disables sample-data loading and data clearing.',
+      'Switching back to Staff restores those actions without reloading.',
+      'Logout returns to the login screen and the interface clearly identifies authentication as simulated.',
+    ])
+    assert.deepEqual(text('US01'), [
+      'Loading the built-in dataset imports exactly 11 event records across three sponsors.',
+      'Uploading a valid CSV with six new nonduplicate event records imports all six without validation errors.',
+      'Reimporting that CSV adds zero duplicate records and displays an appropriate message.',
+      'Invalid records or malformed CSV input generate clear validation errors; invalid data is not silently accepted.',
+      'Imported records remain available after navigating away from and back to the Import page.',
+    ])
+    assert.deepEqual(text('US02'), [
+      'All three built-in sample sponsors appear in the directory.',
+      'Searching Acme returns Acme Technology and excludes unrelated sponsors.',
+      'Selecting Acme displays only its four event records.',
+      'Switching to Northstar displays only its four event records, without records from Acme.',
+    ])
+    assert.equal(text('US03').length, 6)
+    assert.match(text('US03')[4], /zero discrepancies/)
+    assert.match(text('US03')[5], /event-based.*labelled fictional/)
+  })
+
+  test('the seven shared DoD conditions use the measurable wording', () => {
+    assert.deepEqual(
+      DOD_CRITERIA.map((c) => [c.title, c.text]),
+      [
+        ['Acceptance Criteria', '100% of agreed story-specific checks pass.'],
+        ['Functional Testing', '100% of applicable tests pass and zero critical defects remain.'],
+        ['Integration', 'The relevant full Sprint 1 workflow completes once with zero failed required interactions.'],
+        ['Data Accuracy', 'Zero applicable record or metric discrepancies; for US04, correct simulated session and role state.'],
+        ['Usability', 'One teammate other than the implementer completes the relevant workflow without assistance.'],
+        ['Team Verification', 'A designated team member records Pass, name, and date.'],
+        ['Demo Readiness', 'One successful rehearsal with zero failed required actions.'],
+      ],
+    )
+  })
+
+  test('everything starts Not Verified: checks proposed, DoD proposed, nothing passed, Done or Accepted', () => {
+    // Guards against committing invented verification. Change deliberately when the team records real results.
+    assert.deepEqual(VERIFICATION_CHECKS_STATUS, { state: 'proposed' })
     assert.deepEqual(DEFINITION_OF_DONE_STATUS, { state: 'proposed' })
     for (const item of SPRINT_BACKLOG) {
       assert.deepEqual(item.checkResults, {}, item.id)
       assert.deepEqual(item.dodResults, {}, item.id)
-      assert.equal(item.completion.state, 'awaiting-verification', item.id)
-      assert.equal(item.acceptance.state, 'pending', item.id)
+      assert.deepEqual(checkCounts(item), { pass: 0, fail: 0, total: item.verificationChecks.length, required: item.verificationChecks.length }, item.id)
+      assert.deepEqual(conditionCounts(item), { met: 0, fail: 0, total: 7 }, item.id)
       assert.equal(overallStatus(item), 'awaiting-verification', item.id)
+      assert.equal(item.acceptance.state, 'pending', item.id)
     }
   })
 
-  test('story-specific checks match the requested measurable checks', () => {
-    const count = Object.fromEntries(SPRINT_BACKLOG.map((s) => [s.id, s.verificationChecks.length]))
-    assert.deepEqual(count, { US04: 5, US01: 5, US02: 4, US03: 6 })
-    const all = SPRINT_BACKLOG.flatMap((s) => s.verificationChecks.map((c) => c.text)).join('\n')
-    assert.match(all, /not production authentication/)
-    assert.match(all, /Duplicate records are handled/)
-    assert.match(all, /Sponsor searches return the expected matching records/)
-    assert.match(all, /event-based count, not a unique startup count/)
-  })
-
-  test('original Sprint Backlog acceptance criteria are preserved alongside the checks', () => {
+  test('original Sprint Backlog acceptance criteria are preserved alongside the proposed checks', () => {
     for (const item of SPRINT_BACKLOG) assert.ok(item.backlogCriteria.length > 0, item.id)
   })
 
@@ -190,146 +227,179 @@ describe('Sprint 1 backlog and measurable Definition of Done', () => {
   })
 })
 
-describe('Data Accuracy: expected values in the checks match the built-in sample', () => {
-  const sample = readFileSync(fileURLToPath(new URL('../public/sample-data/mlai-sample-sponsor-impact.csv', import.meta.url)), 'utf8')
-  const summaries = summariseSponsors(parseImpactCsv(sample, 'sample.csv').valid)
-  const withExpected = SPRINT_BACKLOG.flatMap((s) => s.verificationChecks).filter((c) => c.expected)
+describe('Objective facts behind the checks (built-in sample and verification file)', () => {
+  const sample = parseImpactCsv(repoFile('public/sample-data/mlai-sample-sponsor-impact.csv'), 'sample.csv')
+  const fixture = parseImpactCsv(repoFile(SIX_RECORD_FIXTURE), 'six.csv')
+  const summaries = summariseSponsors(sample.valid)
 
-  test('US03 has expected values for Acme Technology and Northstar Innovations', () => {
+  test('US01-1: built-in dataset is exactly 11 records across three sponsors', () => {
+    assert.equal(sample.valid.length, 11)
+    assert.equal(summaries.length, 3)
+  })
+
+  test('US01-2: the verification file has six valid records and no validation errors', () => {
+    assert.equal(fixture.fatal, null)
+    assert.deepEqual(fixture.errors, [])
+    assert.equal(fixture.valid.length, 6)
+  })
+
+  test('US01-2: none of the six duplicates the built-in sample or the errors sample', () => {
+    const existing = new Set([
+      ...sample.valid.map(recordKey),
+      ...parseImpactCsv(repoFile('public/sample-data/mlai-sample-with-errors.csv'), 'e.csv').valid.map(recordKey),
+    ])
+    assert.equal(fixture.valid.filter((r) => existing.has(recordKey(r))).length, 0)
+  })
+
+  test('US01-3: reimporting the six adds zero records (same rule the app uses)', () => {
+    const loaded = new Set([...sample.valid, ...fixture.valid].map(recordKey))
+    const fresh = fixture.valid.filter((r) => !loaded.has(recordKey(r)))
+    assert.equal(fresh.length, 0)
+  })
+
+  test('US02-2: searching "Acme" matches Acme Technology only (directory search rule)', () => {
+    const q = 'acme'
+    assert.deepEqual(
+      summaries.filter((s) => s.sponsor.toLowerCase().includes(q)).map((s) => s.sponsor),
+      ['Acme Technology'],
+    )
+  })
+
+  test('US02-3/4: Acme and Northstar each have four records, with no overlap', () => {
+    const acme = sample.valid.filter((r) => r.sponsor === 'Acme Technology')
+    const northstar = sample.valid.filter((r) => r.sponsor === 'Northstar Innovations')
+    assert.equal(acme.length, 4)
+    assert.equal(northstar.length, 4)
+    assert.ok(!northstar.some((r) => acme.includes(r)))
+  })
+
+  const withExpected = SPRINT_BACKLOG.flatMap((s) => s.verificationChecks).filter((c) => c.expected)
+  test('US03-2/3: expected values exist for Acme Technology and Northstar Innovations', () => {
     assert.deepEqual(
       withExpected.map((c) => c.expected!.sponsor),
       ['Acme Technology', 'Northstar Innovations'],
     )
   })
-
   for (const c of withExpected) {
-    test(`${c.expected!.sponsor}: check values equal the calculated sample totals`, () => {
+    test(`US03: ${c.expected!.sponsor} check values equal the calculated sample totals and appear in the wording`, () => {
       const { sponsor, ...expected } = c.expected!
       const s = summaries.find((x) => x.sponsor === sponsor)!
       assert.deepEqual(
         { eventsFunded: s.eventsFunded, attendees: s.attendees, startupsSupported: s.startupsSupported, mediaReach: s.mediaReach, communityEngagement: s.communityEngagement },
         expected,
       )
-      // The wording shown to the audience states the same numbers.
       for (const n of Object.values(expected)) assert.ok(c.text.includes(n.toLocaleString('en-AU')), `${sponsor} text should mention ${n}`)
     })
   }
-
-  test('US01 and US02 count claims match the sample (11 records, 3 sponsors)', () => {
-    assert.equal(parseImpactCsv(sample, 'sample.csv').valid.length, 11)
-    assert.equal(summaries.length, 3)
-  })
 })
 
 describe('Done rules (validator, on synthetic stories)', () => {
   const base: BacklogItem = { ...SPRINT_BACKLOG[1], checkResults: {}, dodResults: {}, implementedBy: [], completion: { state: 'awaiting-verification' }, acceptance: { state: 'pending' } }
   const agreed: DefinitionOfDoneStatus = { state: 'agreed', agreedBy: 'Team 0311', agreedOn: '2026-10-20' }
-  const pass = (by = 'Kai-Po Wang'): CheckResult => ({ result: 'pass', checkedBy: by, checkedOn: '2026-10-20' })
+  const confirmed: ChecksStatus = { state: 'confirmed', confirmedBy: 'Team 0311', confirmedOn: '2026-10-20' }
+  const pass = (by = 'Kai-Po Wang'): RecordedResult => ({ result: 'pass', checkedBy: by, checkedOn: '2026-10-20', evidence: 'Observed as expected' })
   const allChecks = Object.fromEntries(base.verificationChecks.map((c) => [c.id, pass()]))
-  const dodPass = (by = 'Sabiuddin Ahmed Maheen'): DodResult => ({ result: 'pass', checkedBy: by, checkedOn: '2026-10-20' })
-  const allDod = Object.fromEntries(RECORDED_DOD_IDS.map((id) => [id, dodPass()])) as Record<RecordedDodId, DodResult>
+  const allDod = Object.fromEntries(RECORDED_DOD_IDS.map((id) => [id, pass('Sabiuddin Ahmed Maheen')])) as Record<RecordedDodId, RecordedResult>
   const done = { state: 'done' as const, verifiedBy: 'Ian Wang', verifiedOn: '2026-10-21', confirmation: 'All required checks passed' }
   const complete: BacklogItem = { ...base, checkResults: allChecks, dodResults: allDod, implementedBy: ['Kai-Po Wang'], completion: done }
+  const v = (items: BacklogItem[], dod: DefinitionOfDoneStatus = agreed, checks: ChecksStatus = confirmed) => validateSprintBacklog(items, dod, checks)
 
   test('a new story is Not Verified everywhere and valid', () => {
-    assert.deepEqual(checkCounts(base), { pass: 0, fail: 0, total: 5 })
+    assert.deepEqual(checkCounts(base), { pass: 0, fail: 0, total: 5, required: 5 })
     assert.deepEqual(conditionCounts(base), { met: 0, fail: 0, total: 7 })
-    assert.deepEqual(validateSprintBacklog([base], agreed), [])
+    assert.deepEqual(v([base]), [])
   })
 
-  test('a fully verified story passes all rules, with conditions 1 and 6 derived', () => {
-    assert.deepEqual(validateSprintBacklog([complete], agreed), [])
+  test('a fully verified story passes, with conditions 1 and 6 derived', () => {
+    assert.deepEqual(v([complete]), [])
     assert.equal(conditionStatus(complete, 'acceptance-criteria'), 'pass')
     assert.equal(conditionStatus(complete, 'team-verification'), 'pass')
     assert.deepEqual(conditionCounts(complete), { met: 7, fail: 0, total: 7 })
   })
 
-  test('Done is rejected while the DoD is only proposed', () => {
-    assert.deepEqual(validateSprintBacklog([complete], { state: 'proposed' }), ['US01: marked Done before the team has agreed the Definition of Done'])
+  test('Done is rejected while the checks are still proposed', () => {
+    assert.deepEqual(v([complete], agreed, { state: 'proposed' }), ['US01: marked Done while the verification checks are still proposed'])
   })
 
-  test('Done is rejected if any verification check is Not Verified or Fail', () => {
-    const { 'us01-duplicates': _d, ...four } = allChecks
-    assert.deepEqual(validateSprintBacklog([{ ...complete, checkResults: four }], agreed), [
-      'US01: marked Done but 1 verification check(s) have not passed (us01-duplicates)',
-    ])
-    const failing = { ...allChecks, 'us01-duplicates': { result: 'fail' as const, checkedBy: 'Kai-Po Wang', checkedOn: '2026-10-20', note: 'Duplicate imported twice' } }
+  test('Done is rejected while the DoD is only proposed', () => {
+    assert.deepEqual(v([complete], { state: 'proposed' }), ['US01: marked Done before the team has agreed the Definition of Done'])
+  })
+
+  test('Done needs n/n required checks: 4/5 or a Fail is rejected', () => {
+    const { 'us01-reimport': _r, ...four } = allChecks
+    assert.deepEqual(v([{ ...complete, checkResults: four }]), ['US01: marked Done with 4/5 required checks passed'])
+    const failing = { ...allChecks, 'us01-reimport': { ...pass(), result: 'fail' as const, evidence: 'Defect: duplicates added' } }
     const story = { ...complete, checkResults: failing }
-    assert.deepEqual(validateSprintBacklog([story], agreed), ['US01: marked Done but 1 verification check(s) have not passed (us01-duplicates)'])
+    assert.deepEqual(v([story]), ['US01: marked Done with 4/5 required checks passed'])
     assert.equal(conditionStatus(story, 'acceptance-criteria'), 'fail')
   })
 
+  test('every recorded result needs Pass/Fail, a name, a real date and evidence', () => {
+    const story = {
+      ...base,
+      checkResults: {
+        'us01-sample-11': { result: 'pass' as const, checkedBy: '', checkedOn: '2026-02-30', evidence: ' ' },
+        'not-a-check': pass(),
+      },
+    }
+    assert.deepEqual(v([story]), [
+      'US01: check "us01-sample-11" needs "checkedBy"',
+      'US01: check "us01-sample-11" needs "checkedOn" as a real YYYY-MM-DD date',
+      'US01: check "us01-sample-11" needs an "evidence" description',
+      'US01: result recorded for unknown check "not-a-check"',
+    ])
+    const badResult = { ...base, dodResults: { integration: { ...pass(), result: 'not-applicable' } as unknown as RecordedResult } }
+    assert.deepEqual(v([badResult]), ['US01: DoD "integration" result must be "pass" or "fail"'])
+  })
+
   test('Done is rejected if a recorded DoD condition is missing', () => {
-    const { usability: _u, ...rest } = allDod
-    assert.deepEqual(validateSprintBacklog([{ ...complete, dodResults: rest }], agreed), ['US01: marked Done but DoD condition(s) not met: usability'])
+    const { 'demo-readiness': _d, ...rest } = allDod
+    assert.deepEqual(v([{ ...complete, dodResults: rest }]), ['US01: marked Done but DoD condition(s) not met: demo-readiness'])
   })
 
   test('Usability must be checked by someone other than the implementer', () => {
-    const story = { ...complete, dodResults: { ...allDod, usability: dodPass('kai-po wang') } }
-    assert.deepEqual(validateSprintBacklog([story], agreed), [
-      'US01: Usability must be checked by someone other than the implementer (kai-po wang implemented this story)',
-    ])
+    const story = { ...complete, dodResults: { ...allDod, usability: pass('kai-po wang') } }
+    assert.deepEqual(v([story]), ['US01: Usability must be checked by someone other than the implementer (kai-po wang implemented this story)'])
   })
 
-  test('Done needs the implementer recorded, a verifier, a real date and a confirmation', () => {
+  test('Done needs the implementer, a verifier, a real date and a confirmation', () => {
     const bad = { ...complete, implementedBy: [], completion: { state: 'done' as const, verifiedBy: '', verifiedOn: '2026-02-30', confirmation: ' ' } }
-    assert.deepEqual(validateSprintBacklog([bad], agreed), [
+    assert.deepEqual(v([bad]), [
       'US01: Done needs "verifiedBy" (a designated team member)',
       'US01: Done needs "verifiedOn" as a real YYYY-MM-DD date',
       'US01: Done needs a "confirmation" that the required checks passed',
-      'US01: marked Done but "implementedBy" is empty (needed to check the Usability rule)',
+      'US01: marked Done but "implementedBy" is empty (needed for the Usability condition)',
     ])
   })
 
   test('verification date cannot be earlier than the checks it confirms', () => {
-    const early = { ...complete, completion: { ...done, verifiedOn: '2026-10-19' } }
-    assert.deepEqual(validateSprintBacklog([early], agreed), ['US01: "verifiedOn" is earlier than some recorded checks'])
-  })
-
-  test('every recorded result needs who and when; Fail needs a note', () => {
-    const story = {
-      ...base,
-      checkResults: { 'us01-valid-import': { result: 'fail' as const, checkedBy: '', checkedOn: 'today' }, 'not-a-check': pass() },
-    }
-    assert.deepEqual(validateSprintBacklog([story], agreed), [
-      'US01: check "us01-valid-import" needs "checkedBy"',
-      'US01: check "us01-valid-import" needs "checkedOn" as a real YYYY-MM-DD date',
-      'US01: check "us01-valid-import" is Fail and needs a note describing the defect',
-      'US01: result recorded for unknown check "not-a-check"',
-    ])
-  })
-
-  test('only Data Accuracy may be not applicable, and it needs a reason', () => {
-    const na = (reason: string): DodResult => ({ result: 'not-applicable', checkedBy: 'Ian Wang', checkedOn: '2026-10-20', reason })
-    assert.deepEqual(validateSprintBacklog([{ ...base, dodResults: { 'data-accuracy': na('No metrics displayed') } }], agreed), [])
-    assert.deepEqual(validateSprintBacklog([{ ...base, dodResults: { usability: na('n/a'), 'data-accuracy': na('') } }], agreed), [
-      'US01: DoD "usability" cannot be marked not applicable',
-      'US01: DoD "data-accuracy" not applicable needs a reason',
-    ])
+    assert.deepEqual(v([{ ...complete, completion: { ...done, verifiedOn: '2026-10-19' } }]), ['US01: "verifiedOn" is earlier than some recorded checks'])
   })
 
   test('derived conditions cannot be recorded directly', () => {
-    const story = { ...base, dodResults: { 'team-verification': dodPass() } as unknown as BacklogItem['dodResults'] }
-    assert.deepEqual(validateSprintBacklog([story], agreed), ['US01: "team-verification" cannot be recorded directly (it is derived)'])
+    const story = { ...base, dodResults: { 'team-verification': pass() } as unknown as BacklogItem['dodResults'] }
+    assert.deepEqual(v([story]), ['US01: "team-verification" cannot be recorded directly (it is derived)'])
+  })
+
+  test('confirming checks or agreeing the DoD needs who and when', () => {
+    assert.deepEqual(validateSprintBacklog([base], { state: 'agreed', agreedBy: '', agreedOn: 'soon' }, { state: 'confirmed', confirmedBy: '', confirmedOn: 'x' }), [
+      'Definition of Done: "agreedBy" is required',
+      'Definition of Done: "agreedOn" must be a real YYYY-MM-DD date',
+      'Verification checks: "confirmedBy" is required',
+      'Verification checks: "confirmedOn" must be a real YYYY-MM-DD date',
+    ])
   })
 
   test('Accepted requires Done; Changes Requested can be recorded any time', () => {
     const accepted = { state: 'accepted' as const, confirmedBy: 'MLAI', confirmedOn: '2026-10-22' }
-    assert.deepEqual(validateSprintBacklog([{ ...base, acceptance: accepted }], agreed), ['US01: marked Accepted but not yet verified Done'])
-    assert.deepEqual(validateSprintBacklog([{ ...complete, acceptance: accepted }], agreed), [])
+    assert.deepEqual(v([{ ...base, acceptance: accepted }]), ['US01: marked Accepted but not yet verified Done'])
+    assert.deepEqual(v([{ ...complete, acceptance: accepted }]), [])
     const cr = { state: 'changes-requested' as const, confirmedBy: 'Tutor', confirmedOn: '2026-10-22', note: 'Show period filter' }
-    assert.deepEqual(validateSprintBacklog([{ ...base, acceptance: cr }], agreed), [])
+    assert.deepEqual(v([{ ...base, acceptance: cr }]), [])
   })
 
-  test('an agreed DoD needs who agreed it and when', () => {
-    assert.deepEqual(validateSprintBacklog([base], { state: 'agreed', agreedBy: '', agreedOn: 'soon' }), [
-      'Definition of Done: "agreedBy" is required',
-      'Definition of Done: "agreedOn" must be a real YYYY-MM-DD date',
-    ])
-  })
-
-  test('failed checks show as "failing", never as Done', () => {
-    const story = { ...base, checkResults: { 'us01-valid-import': { result: 'fail' as const, checkedBy: 'Ian Wang', checkedOn: '2026-10-20', note: 'Upload crashed' } } }
+  test('a failed check shows as "failing", never as Done', () => {
+    const story = { ...base, checkResults: { 'us01-sample-11': { ...pass(), result: 'fail' as const, evidence: 'Only 10 imported' } } }
     assert.equal(overallStatus(story), 'failing')
   })
 })

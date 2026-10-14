@@ -87,10 +87,10 @@ That leaves about 80 seconds of buffer before the 5-minute limit. Use it for que
 - *Click* **Sprint summary** (top right).
 - This is our Sprint 1 completion summary. We keep three things apart.
 - Demonstrated: all 16 points, which you've just seen.
-- Done: verified against our Definition of Done. These seven conditions are measurable. For example, 100% of checks passed, zero critical defects, and usability tried by someone who didn't build it. It's our proposed standard.
+- Done: verified against our Definition of Done. Each of the seven conditions is measurable. For example, 100% of the story's checks pass, zero critical defects, and one rehearsal with zero failed actions. It's our proposed standard.
 - **Done status [CONFIRM]:** say what the page actually shows. If the team has agreed the DoD and verified stories, say how many points and who checked them. If not: "Our Definition of Done is still proposed, and no story is marked Done yet. The app never ticks these automatically. A team member has to record each check with their name and the date."
 - Accepted stays pending. That's for MLAI and our tutor to decide after feedback, not us.
-- (Optional: *click US03.* Every check says "Demonstrated this session", but still "Not Verified". Showing a feature isn't the same as verifying it. The Acme and Northstar values here are the ones you just saw on the dashboard.)
+- (Optional: *click US03.* It needs 6 out of 6 checks. They're specific: Acme must show exactly 4 events, 505 attendees, and so on. Most say "Demonstrated this session", but they're still "Not Verified" with no evidence recorded. Showing a feature isn't the same as verifying it.)
 - What's simulated: login, roles, and data that lives in the browser.
 - What's not built yet: automated quarterly reports, approvals, and live connections to MLAI's platforms.
 - **Inspect and adapt [CONFIRM]:** one thing you'd change in Sprint 2 from your retrospective. Suggestions based on the prototype itself:
@@ -112,6 +112,7 @@ That leaves about 80 seconds of buffer before the 5-minute limit. Use it for que
 | Why "Startup Participations" and not "Startups Supported"? | It is the A1.2 Startups Supported metric, but our data only has a count per event, so a startup at two events is counted twice. We labelled it honestly. Unique counts need startup IDs. |
 | What if a CSV is broken? | It's checked first. An unmatched quote, a stray quote, the wrong number of columns, or a semicolon-separated file gets a clear message with the line number, and bad rows aren't imported. |
 | Why is nothing marked Done? | Demonstrating a feature isn't the same as verifying it. A story is Done only when every measurable check is recorded as Pass and all seven DoD conditions are met. That includes usability tested by someone other than the implementer, and a team member recording their name, the date and their confirmation. Acceptance then comes from the client or tutor. |
+| Where do the checks come from? | They're our proposed measurable checks, e.g. "Loading the built-in dataset imports exactly 11 records across three sponsors". They're labelled proposed until the team confirms them against our backlog. |
 | Your tests pass, so isn't it Done? | Automated tests are evidence for Functional Testing and Data Accuracy, but they don't record a Pass on their own. The team still records each result. |
 | Can anyone tick the boxes on the website? | No. Official status is git-tracked in the project, and the build rejects a Done story with missing checks, names or dates. |
 | Where does the data come from? | A CSV file. For the demo, a fictional sample. There are no live platform connections yet. |

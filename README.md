@@ -31,7 +31,7 @@ Other scripts:
 | Command | What it does |
 |---|---|
 | `npm run demo` | Builds and serves the production build at http://localhost:4173. **Use this for the class demo** |
-| `npm test` | Runs 59 tests: CSV import, validation and malformed-input handling, KPI totals, sponsor switching, period filter, Startup Participations labelling, measurable Definition of Done rules, and checks that the US03 expected values match the sample data. Needs Node 22.18+ (native TypeScript) |
+| `npm test` | Runs 65 tests: CSV import, validation and malformed-input handling, KPI totals, sponsor switching, period filter, Startup Participations labelling, measurable Definition of Done rules (evidence required, n/n checks, proposed vs confirmed), and the data facts behind the checks (11 sample records, the six-record verification file, Acme search, US03 expected values). Needs Node 22.18+ (native TypeScript) |
 | `npm run build` | Type-checks (`tsc -b`) and builds to `dist/` |
 | `npm run typecheck` | Type-check the app, config and tests |
 | `npm run preview` | Serves an existing production build |
@@ -100,37 +100,45 @@ The site keeps three things separate:
 - **Accepted**: explicitly accepted by the client or tutor.
 
 The **measurable Definition of Done** (proposed team standard):
-1. Acceptance Criteria: 100% of the story's agreed acceptance criteria recorded as Pass.
-2. Functional Testing: 100% of relevant functional test cases pass, zero unresolved critical defects.
-3. Integration: works within authorised access → data import → sponsor selection → impact dashboard, no failed required interactions.
-4. Data Accuracy: displayed metrics and records match expected results from the fictional sample dataset.
-5. Usability: a team member other than the implementer completes the workflow without assistance.
-6. Team Verification: a designated team member records name, date and confirmation that required checks passed.
-7. Demo Readiness: demonstrable with sample data, zero broken required interactions.
+1. Acceptance Criteria: 100% of agreed story-specific checks pass.
+2. Functional Testing: 100% of applicable tests pass and zero critical defects remain.
+3. Integration: the relevant full Sprint 1 workflow completes once with zero failed required interactions.
+4. Data Accuracy: zero applicable record or metric discrepancies; for US04, correct simulated session and role state.
+5. Usability: one teammate other than the implementer completes the relevant workflow without assistance.
+6. Team Verification: a designated team member records Pass, name, and date.
+7. Demo Readiness: one successful rehearsal with zero failed required actions.
 
-Each story also has **measurable verification checks** (US04: 5, US01: 5, US02: 4, US03: 6). The US03 checks state the expected Acme Technology and Northstar Innovations values, and `npm test` confirms they equal the sample-data calculations. These values apply only to the unchanged built-in sample with no extra imports and All dates selected. The original Sprint Backlog acceptance criteria are kept alongside as the reference.
+Each story has **proposed verification checks**, all required: **US04 5/5, US01 5/5, US02 4/4, US03 6/6**. Each is shown as Pass / Fail / Not Verified with its recorded evidence. They're labelled *proposed* until the team confirms them, because they may differ from the original Sprint Backlog acceptance criteria. Those are kept unchanged alongside as the reference.
+
+- **US01 checks 2–3** use [`public/sample-data/mlai-verification-six-new-records.csv`](public/sample-data/mlai-verification-six-new-records.csv): six fictional, non-duplicate event records for the three sample sponsors. It's also served at `https://retesbiz.github.io/mlai-sponsor-dashboard/sample-data/mlai-verification-six-new-records.csv`. Importing it after the sample gives 17 records. Reimporting adds 0 and shows "No new records imported … 6 already-imported record(s) skipped".
+- **US03 checks 2–3** state the expected Acme Technology and Northstar Innovations values. They apply only to the unchanged built-in sample (no extra imports, All dates), so run US03 before importing the six-record file, or **Reset demo** first.
+- `npm test` confirms the facts the checks rely on: 11 records across 3 sponsors; the six-record file imports 6 with 0 errors and duplicates nothing; "acme" matches only Acme Technology; Acme and Northstar each have 4 records; and the US03 values equal the sample-data calculations. These tests support the checks but **do not record a Pass**. The team records each result.
 
 Official status is git-tracked in [`src/data/sprintStatus.ts`](src/data/sprintStatus.ts). Visitors can't change it, and there are no clickable checklists on the site. To record verification:
 
 
-1. **Agree the Definition of Done (only if the team actually agrees it).** Set
-   `DEFINITION_OF_DONE_STATUS = { state: 'agreed', agreedOn: 'YYYY-MM-DD', agreedBy: '…' }`. Until then the page shows **Sprint 1 Definition of Done — Measurable Criteria** labelled **Proposed — Awaiting Team Confirmation**.
-2. **Record who implemented each story:** `implementedBy: ['…']` (needed for the Usability rule).
-3. **Record each story verification check after running it:** `checkResults: { 'us01-valid-import': { result: 'pass', checkedBy, checkedOn }, … }`. A Fail needs a `note` (e.g. defect reference). Unrecorded checks show **Not Verified**.
-4. **Record DoD conditions 2, 3, 4, 5 and 7 for the story:** `dodResults: { 'functional-testing': { result: 'pass', checkedBy, checkedOn, note: '12/12 cases, 0 critical defects' }, … }`. Only Data Accuracy may be `not-applicable`, and it needs a `reason`. Usability must be checked by someone **not** in `implementedBy`.
-   - Condition 1 (Acceptance Criteria) is **derived**: Pass only when 100% of the story's checks are recorded Pass.
+1. **Confirm the checks and agree the DoD (only if the team actually does).**
+   `VERIFICATION_CHECKS_STATUS = { state: 'confirmed', confirmedOn, confirmedBy }` and `DEFINITION_OF_DONE_STATUS = { state: 'agreed', agreedOn, agreedBy }`. Until then the page shows **Proposed — awaiting team confirmation** on both.
+2. **Record who implemented each story:** `implementedBy: ['…']` (needed for the Usability condition).
+3. **Record each story check after running it, with evidence:**
+   `checkResults: { 'us01-sample-11': { result: 'pass', checkedBy, checkedOn, evidence: 'Load Sample Data → "11 sponsor-impact records imported", 3 sponsors' }, … }`.
+   `result` is `pass` or `fail`, and `evidence` (what was done or observed, e.g. test case ID, screenshot, defect ref) is required. Unrecorded checks show **Not Verified**.
+4. **Record DoD conditions 2, 3, 4, 5 and 7 the same way, in `dodResults`**, e.g.
+   `'functional-testing': { result: 'pass', checkedBy, checkedOn, evidence: 'TC-01–TC-05 pass; defect log: 0 critical' }`.
+   Usability must be checked by someone **not** in `implementedBy`.
+   - Condition 1 (Acceptance Criteria) is **derived**: Pass only when 100% of the story's required checks (n/n) are recorded Pass.
    - Condition 6 (Team Verification) is **derived** from step 5.
 5. **Mark Done only when every check and condition passes:** `completion: { state: 'done', verifiedBy, verifiedOn, confirmation: 'All required checks passed' }`. Otherwise it stays `{ state: 'awaiting-verification' }`.
 6. **Record client/tutor acceptance only after explicit feedback:** `acceptance: { state: 'accepted' | 'changes-requested', confirmedBy, confirmedOn, note? }`. Default `{ state: 'pending' }`. Accepted requires Done.
 
 `npm test`, and therefore the GitHub Pages deploy, fails if:
-- Done is recorded with any check or condition not passed, or before the DoD is agreed.
+- Done is recorded with fewer than n/n checks passed, any DoD condition not passed, the checks still proposed, or the DoD not agreed.
 - `implementedBy` is missing, or Usability was checked by the implementer.
-- Any result is missing a name, real date, Fail note or N/A reason.
+- Any result is missing Pass/Fail, a name, a real date or evidence.
 - The verification date is before the checks it confirms.
 - Accepted comes before Done.
 
-Automated test runs, page visits and clicks never record a result.
+Automated test runs, page visits and clicks never record a result. "Demonstrated this session" on a check is demonstration evidence, kept separate from formal evidence.
 
 `criteriaSource: 'draft'` marks acceptance criteria written from the Sprint 1 scope. Replace them with the Product Backlog wording. Commit and push to update the hosted site.
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, CircleDashed, FileCheck2, Info, MinusCircle, MonitorPlay, UserCheck, XCircle } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, CircleDashed, FileCheck2, Info, MonitorPlay, UserCheck, XCircle } from 'lucide-react'
 import { useAppState } from '../state/AppState'
 import { computeTotals } from '../lib/metrics'
 import { formatDate, formatNumber } from '../lib/format'
@@ -10,6 +10,8 @@ import {
   SAMPLE_VALUES_NOTE,
   SPRINT,
   SPRINT_BACKLOG,
+  SIX_RECORD_FIXTURE,
+  VERIFICATION_CHECKS_STATUS,
   checkCounts,
   checkStatus,
   conditionCounts,
@@ -18,24 +20,23 @@ import {
   validateSprintBacklog,
   type AcceptanceStatus,
   type BacklogItem,
-  type ConditionStatus,
+  type ResultStatus,
   type EvidenceKey,
 } from '../data/sprintStatus'
 import { Badge, Button, Card, CardHeader, PageHeader } from '../components/ui'
 
 const iso = (d: string) => formatDate(d)
 
-const RESULT_STYLE: Record<ConditionStatus, { label: string; cls: string; icon: typeof Info }> = {
+const RESULT_STYLE: Record<ResultStatus, { label: string; cls: string; icon: typeof Info }> = {
   pass: { label: 'Pass', cls: 'bg-emerald-50 text-emerald-800 ring-emerald-200', icon: CheckCircle2 },
   fail: { label: 'Fail', cls: 'bg-red-50 text-red-700 ring-red-200', icon: XCircle },
   'not-verified': { label: 'Not Verified', cls: 'bg-slate-100 text-slate-600 ring-slate-200', icon: CircleDashed },
-  'not-applicable': { label: 'N/A', cls: 'bg-slate-50 text-slate-500 ring-slate-200', icon: MinusCircle },
 }
 
-function ResultPill({ status }: { status: ConditionStatus }) {
+function ResultPill({ status }: { status: ResultStatus }) {
   const { label, cls, icon: Icon } = RESULT_STYLE[status]
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${cls}`}>
+    <span className={`inline-flex w-[6.6rem] shrink-0 items-center justify-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${cls}`}>
       <Icon className="size-3.5" aria-hidden />
       {label}
     </span>
@@ -117,6 +118,7 @@ export default function SprintPage() {
   const doneStories = SPRINT_BACKLOG.filter((i) => i.completion.state === 'done').length
   const acceptedPoints = sumPoints((i) => i.acceptance.state === 'accepted')
   const dodAgreed = DEFINITION_OF_DONE_STATUS.state === 'agreed'
+  const checksConfirmed = VERIFICATION_CHECKS_STATUS.state === 'confirmed'
 
   // Session evidence = "Demonstrated" only. It never counts as a Pass.
   const sponsorNames = new Set(records.map((r) => r.sponsor))
@@ -310,7 +312,16 @@ export default function SprintPage() {
 
       {/* 4 · Expandable per-story verification */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[1.05rem] font-semibold tracking-tight text-slate-900">Story verification checks</h2>
+        <h2 className="flex flex-wrap items-center gap-2.5 text-[1.05rem] font-semibold tracking-tight text-slate-900">
+          Story verification checks
+          {checksConfirmed ? (
+            <Badge tone="green">
+              Confirmed by {VERIFICATION_CHECKS_STATUS.state === 'confirmed' && VERIFICATION_CHECKS_STATUS.confirmedBy}
+            </Badge>
+          ) : (
+            <span className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900">Proposed — awaiting team confirmation</span>
+          )}
+        </h2>
         <Button size="sm" onClick={() => setOpen(allOpen ? new Set() : new Set(SPRINT_BACKLOG.map((i) => i.id)))} aria-expanded={allOpen}>
           {allOpen ? 'Collapse all' : 'Expand all'}
         </Button>
@@ -338,24 +349,33 @@ export default function SprintPage() {
 
               <div className="grid gap-6 border-t border-slate-100 px-5 py-5 sm:px-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
                 <section>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Measurable verification checks</h3>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      {checksConfirmed ? 'Verification checks' : 'Proposed verification checks'}
+                    </h3>
+                    <p className="text-xs font-semibold text-slate-700">
+                      Required: {cc.required}/{cc.required} Pass · <span className="tabular-nums">{cc.pass} recorded Pass</span>
+                    </p>
+                  </div>
                   <ul className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200">
-                    {item.verificationChecks.map((c) => {
+                    {item.verificationChecks.map((c, n) => {
                       const r = item.checkResults[c.id]
-                      const demo = c.evidence ? evidence[c.evidence] : false
+                      const demo = c.demo ? evidence[c.demo] : false
                       return (
                         <li key={c.id} className="flex items-start gap-3 px-3.5 py-2.5 text-sm">
                           <ResultPill status={checkStatus(item, c.id)} />
                           <span className="min-w-0 flex-1">
-                            <span className="text-slate-900">{c.text}</span>
+                            <span className="text-slate-900">
+                              <span className="mr-1 font-semibold text-slate-500">{n + 1}.</span>
+                              {c.text}
+                            </span>
                             <span className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-500">
                               {r ? (
                                 <span className={r.result === 'fail' ? 'text-red-700' : 'text-emerald-800'}>
-                                  {r.checkedBy}, {iso(r.checkedOn)}
-                                  {r.note ? ` · ${r.note}` : ''}
+                                  <span className="font-semibold">Evidence:</span> {r.evidence} · {r.checkedBy}, {iso(r.checkedOn)}
                                 </span>
                               ) : (
-                                <span>No result recorded</span>
+                                <span>Evidence: none recorded</span>
                               )}
                               {demo && (
                                 <span className="inline-flex items-center gap-1 text-blue-700">
@@ -369,6 +389,13 @@ export default function SprintPage() {
                     })}
                   </ul>
                   {item.verificationChecks.some((c) => c.expected) && <p className="mt-2 text-xs text-slate-500">{SAMPLE_VALUES_NOTE}</p>}
+                  {item.id === 'US01' && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Checks 2–3 use the fictional verification file <code className="rounded bg-slate-100 px-1">{SIX_RECORD_FIXTURE.replace('public/', '')}</code> (six new,
+                      non-duplicate records).
+                    </p>
+                  )}
+                  <p className="mt-2 text-xs text-slate-500">“Demonstrated this session” is demonstration evidence only. It never records a Pass.</p>
                   <details className="mt-3 text-sm">
                     <summary className="cursor-pointer font-medium text-slate-700 hover:text-slate-900">
                       Sprint Backlog acceptance criteria ({item.backlogCriteria.length})
@@ -383,7 +410,7 @@ export default function SprintPage() {
                 </section>
 
                 <section>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Definition of Done conditions</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Definition of Done conditions · required 7/7</h3>
                   <ul className="mt-3 space-y-2">
                     {DOD_CRITERIA.map((c, i) => {
                       const status = conditionStatus(item, c.id)
@@ -396,10 +423,7 @@ export default function SprintPage() {
                               {i + 1}. {c.title}
                             </span>
                             <span className="block text-xs text-slate-500">
-                              {SOURCE_NOTE[c.source] ??
-                                (rec
-                                  ? `${rec.checkedBy}, ${iso(rec.checkedOn)}${rec.result === 'not-applicable' ? ` · ${rec.reason}` : rec.note ? ` · ${rec.note}` : ''}`
-                                  : 'No result recorded')}
+                              {SOURCE_NOTE[c.source] ?? (rec ? `Evidence: ${rec.evidence} · ${rec.checkedBy}, ${iso(rec.checkedOn)}` : 'Evidence: none recorded')}
                             </span>
                           </span>
                         </li>
